@@ -59,7 +59,7 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
 )
 
-set(CUSTOM_DSO_DIR $ENV{CUSTOM_DSO_PATH})
+set(CUSTOM_DSO_DIR "C:/Users/joran/Documents/houdini21.0/dso")
 
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
