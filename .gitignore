@@ -69,6 +69,8 @@ compile_commands.json
 
 dso/
 *.otl
+*.hipnc
+*.hda
 
 ############################################
 # Logs
