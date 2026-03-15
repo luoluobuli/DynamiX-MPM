@@ -70,8 +70,6 @@ compile_commands.json
 dso/
 *.otl
 *.hda
-*.hip
-*.hipnc
 
 ############################################
 # Logs
