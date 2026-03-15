@@ -11,6 +11,7 @@
 #include <PRM/PRM_SpareData.h>
 #include <OP/OP_Operator.h>
 #include <OP/OP_OperatorTable.h>
+#include <CH/CH_Manager.h>
 
 #include <iostream>
 #include <limits.h>
@@ -36,15 +37,16 @@ void
 newSopOperator(OP_OperatorTable *table)
 {
     table->addOperator(
-	    new OP_Operator("CusMPM",			// Internal name
-			    "MyMPM",			// UI name
-			     SOP_MPM::myConstructor,	// How to build the SOP
-			     SOP_MPM::myTemplateList,	// My parameters
-			     0,				// Min # of sources
-			     0,				// Max # of sources
-			     SOP_MPM::myVariables,	// Local variables
-			     OP_FLAG_GENERATOR)		// Flag it as generator
-	    );
+	    new OP_Operator(
+			"CusMPM",			// Internal name
+		    "MyMPM",			// UI name
+			SOP_MPM::myConstructor,	// How to build the SOP
+			SOP_MPM::myTemplateList,	// My parameters
+			1,				// Min # of sources
+			1,				// Max # of sources
+			SOP_MPM::myVariables // Local variables
+		)
+	);
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -53,6 +55,7 @@ newSopOperator(OP_OperatorTable *table)
 //Example to declare a variable for angle you can do like this :
 //static PRM_Name		angleName("angle", "Angle");
 
+static PRM_Name dtName("substeps", "Sub Steps");
 
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -65,6 +68,7 @@ newSopOperator(OP_OperatorTable *table)
 // For example : If you are declaring the inital value for the angle parameter
 // static PRM_Default angleDefault(30.0);	
 
+static PRM_Default dtDefault(4.0);
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
@@ -79,6 +83,7 @@ SOP_MPM::myTemplateList[] = {
 
 /////////////////////////////////////////////////////////////////////////////////////////////
 
+	PRM_Template(PRM_FLT, 1, &dtName, &dtDefault),
     PRM_Template()
 };
 
@@ -125,7 +130,62 @@ OP_ERROR
 SOP_MPM::cookMySop(OP_Context &context)
 {
 	fpreal now = context.getTime();
-	std::cerr << "Hello world! This is the initialization for MPM." << std::endl;
+
+	if (lockInputs(context) >= UT_ERROR_ABORT)
+		return error();
+
+	// Copy the input geometry (input 0) into the output.
+	duplicateSource(0, context);
+
+	std::cerr << "Frame time: " << now
+		<< "  num points: " << gdp->getNumPoints() << std::endl;
+
+	// Get dt
+	fpreal fps = CHgetManager()->getSamplesPerSec();
+	fpreal dt = 1.0 / fps;
+
+	int substeps = SYSmax(evalInt("substeps", 0, now), 1);
+	dt = dt / (fpreal)substeps;
+
+	// Compute
+	GA_RWHandleV3 p_handle(gdp->getP());
+	GA_Attribute* v_attrib = gdp->findFloatTuple(GA_ATTRIB_POINT, "v", 3);
+	if (!v_attrib)
+		v_attrib = gdp->addFloatTuple(GA_ATTRIB_POINT, "v", 3);
+
+	GA_RWHandleV3 v_handle(v_attrib);
+
+	if (!p_handle.isValid() || !v_handle.isValid())
+	{
+		unlockInputs();
+		addError(SOP_MESSAGE, "Failed to access P or v.");
+		return error();
+	}
+
+	GA_Iterator it(gdp->getPointRange());
+	for (; !it.atEnd(); ++it)
+	{
+		GA_Offset ptoff = *it;
+
+		UT_Vector3 pos = p_handle.get(ptoff);
+		UT_Vector3 vel = v_handle.get(ptoff);
+
+		vel.y() -= dt * 9.8f;
+
+		if (pos.y() < 0.001f) {
+			vel.y() = -vel.y() * 0.8f;
+		}
+
+		pos += dt * vel;
+
+		v_handle.set(ptoff, vel);
+		p_handle.set(ptoff, pos);
+	}
+
+	// End of MPM code
+
+	unlockInputs();
+
     return error();
 }
 
