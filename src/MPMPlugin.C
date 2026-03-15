@@ -55,7 +55,7 @@ newSopOperator(OP_OperatorTable *table)
 //Example to declare a variable for angle you can do like this :
 //static PRM_Name		angleName("angle", "Angle");
 
-static PRM_Name dtName("substeps", "Substeps");
+static PRM_Name dtName("substeps", "Sub Steps");
 
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -137,15 +137,55 @@ SOP_MPM::cookMySop(OP_Context &context)
 	// Copy the input geometry (input 0) into the output.
 	duplicateSource(0, context);
 
+	std::cerr << "Frame time: " << now
+		<< "  num points: " << gdp->getNumPoints() << std::endl;
+
 	// Get dt
-	fpreal substeps = evalInt("substeps", 0, now);
-	fpreal dt = 1.0 / SYSmax(substeps, 1.0);
+	fpreal fps = CHgetManager()->getSamplesPerSec();
+	fpreal dt = 1.0 / fps;
 
+	int substeps = SYSmax(evalInt("substeps", 0, now), 1);
+	dt = dt / (fpreal)substeps;
 
+	// Compute
+	GA_RWHandleV3 p_handle(gdp->getP());
+	GA_Attribute* v_attrib = gdp->findFloatTuple(GA_ATTRIB_POINT, "v", 3);
+	if (!v_attrib)
+		v_attrib = gdp->addFloatTuple(GA_ATTRIB_POINT, "v", 3);
+
+	GA_RWHandleV3 v_handle(v_attrib);
+
+	if (!p_handle.isValid() || !v_handle.isValid())
+	{
+		unlockInputs();
+		addError(SOP_MESSAGE, "Failed to access P or v.");
+		return error();
+	}
+
+	GA_Iterator it(gdp->getPointRange());
+	for (; !it.atEnd(); ++it)
+	{
+		GA_Offset ptoff = *it;
+
+		UT_Vector3 pos = p_handle.get(ptoff);
+		UT_Vector3 vel = v_handle.get(ptoff);
+
+		vel.y() -= dt * 9.8f;
+
+		if (pos.y() < 0.001f) {
+			vel.y() = -vel.y() * 0.8f;
+		}
+
+		pos += dt * vel;
+
+		v_handle.set(ptoff, vel);
+		p_handle.set(ptoff, pos);
+	}
+
+	// End of MPM code
 
 	unlockInputs();
 
-	std::cerr << "Hello world! This is the initialization for MPM." << std::endl;
     return error();
 }
 

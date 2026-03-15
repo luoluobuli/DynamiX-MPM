@@ -7,18 +7,14 @@
 
 #### Set up Houdini environment variables
 
-You need to set two environment variables:
-HOUDINI_DSO_PATH
-%CUSTOM_DSO_PATH%;&
-
-CUSTOM_DSO_PATH
-D:\Documents\houdini\dso
-
-For CUSTOM_DSO_PATH, you can set it to any directory you want.
+You need to set two environment variables:  
+`CUSTOM_DSO_PATH`: `C:\Users\<username>\Documents\houdini21.0\dso`  
+`HOUDINI_DSO_PATH`: `%CUSTOM_DSO_PATH%;&`
 
 #### Set up variables in CMakelists.txt
 
-You need to set `HOUDINI_INSTALL_PATH` to the path where Houdini is installed. For example, if Houdini is installed in `D:/Program Files/Side Effects Software/Houdini 21.0.596`, then you should set `HOUDINI_INSTALL_PATH` to `D:/Program Files/Side Effects Software/Houdini 21.0.596`.
+You need to set `HOUDINI_INSTALL_PATH` to the path where Houdini is installed.  
+For example: `D:/Program Files/Side Effects Software/Houdini 21.0.596`.
 
 ### Building the project using CMake
 Use CMake 3.24 or above to configure and generate the Visual Studio solution as follows:
