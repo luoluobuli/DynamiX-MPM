@@ -69,6 +69,12 @@ private:
     /// Another use for local data is a cache to store expensive calculations.
 
 	// NOTE : You can declare local variables here
+    std::vector<std::vector<UT_Vector3>> pos_cache;
+    std::vector<std::vector<UT_Vector3>> vel_cache;
+
+    int last_cached_frame = 0;
+    int last_restart_frame = 1;
+    int last_substeps = 4;
 };
 } // End HDK_Sample namespace
 
