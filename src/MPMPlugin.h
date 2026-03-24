@@ -18,9 +18,6 @@ public:
     /// Each parm template refers to a parameter.
     static PRM_Template		 myTemplateList[];
 
-    /// This optional data stores the list of local variables.
-    static CH_LocalVariable	 myVariables[];
-
 protected:
 
 	     SOP_MPM(OP_Network *net, const char *name, OP_Operator *op);
@@ -69,6 +66,7 @@ private:
     /// Another use for local data is a cache to store expensive calculations.
 
 	// NOTE : You can declare local variables here
+    fpreal myPrevTime = -1.0;
 };
 } // End HDK_Sample namespace
 

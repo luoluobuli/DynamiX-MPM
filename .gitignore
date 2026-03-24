@@ -68,6 +68,7 @@ compile_commands.json
 ############################################
 
 dso/
+backup/
 *.otl
 *.hda
 

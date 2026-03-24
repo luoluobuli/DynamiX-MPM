@@ -43,8 +43,7 @@ newSopOperator(OP_OperatorTable *table)
 			SOP_MPM::myConstructor,	// How to build the SOP
 			SOP_MPM::myTemplateList,	// My parameters
 			1,				// Min # of sources
-			1,				// Max # of sources
-			SOP_MPM::myVariables // Local variables
+			1				// Max # of sources
 		)
 	);
 }
@@ -55,8 +54,7 @@ newSopOperator(OP_OperatorTable *table)
 //Example to declare a variable for angle you can do like this :
 //static PRM_Name		angleName("angle", "Angle");
 
-static PRM_Name dtName("substeps", "Sub Steps");
-
+static PRM_Name gravityName("gravity", "Gravity");
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //				     ^^^^^^^^    ^^^^^^^^^^^^^^^
@@ -68,7 +66,7 @@ static PRM_Name dtName("substeps", "Sub Steps");
 // For example : If you are declaring the inital value for the angle parameter
 // static PRM_Default angleDefault(30.0);	
 
-static PRM_Default dtDefault(4.0);
+static PRM_Default gravityDefault(9.8);
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
@@ -83,7 +81,7 @@ SOP_MPM::myTemplateList[] = {
 
 /////////////////////////////////////////////////////////////////////////////////////////////
 
-	PRM_Template(PRM_FLT, 1, &dtName, &dtDefault),
+	PRM_Template(PRM_FLT, 1, &gravityName, &gravityDefault),
     PRM_Template()
 };
 
@@ -92,13 +90,6 @@ SOP_MPM::myTemplateList[] = {
 enum {
 	VAR_PT,		// Point number of the star
 	VAR_NPT		// Number of points in the star
-};
-
-CH_LocalVariable
-SOP_MPM::myVariables[] = {
-    { "PT",	VAR_PT, 0 },		// The table provides a mapping
-    { "NPT",	VAR_NPT, 0 },		// from text string to integer token
-    { 0, 0, 0 },
 };
 
 bool
@@ -137,17 +128,35 @@ SOP_MPM::cookMySop(OP_Context &context)
 	// Copy the input geometry (input 0) into the output.
 	duplicateSource(0, context);
 
-	std::cerr << "Frame time: " << now
-		<< "  num points: " << gdp->getNumPoints() << std::endl;
-
+	// ------------------- Playback Control ----------------------
+	
 	// Get dt
-	fpreal fps = CHgetManager()->getSamplesPerSec();
-	fpreal dt = 1.0 / fps;
+	fpreal t = context.getTime();
 
-	int substeps = SYSmax(evalInt("substeps", 0, now), 1);
-	dt = dt / (fpreal)substeps;
+	// Reset simulation state if time goes backwards or if substeps changes
+	bool reset = false;
 
-	// Compute
+	if (myPrevTime < 0)
+		reset = true;
+	else if (t < myPrevTime)
+		reset = true;
+
+	if (reset)
+	{
+		// 1. destroy / clear old solver state
+		// 2. rebuild particles from Houdini input
+		// 3. rebuild grid from current params
+		// 4. set bookkeeping
+		myPrevTime = t;
+		return error();
+	}
+
+	fpreal dt = t - myPrevTime;
+
+	myPrevTime = t;
+
+	// ------------------- Simulation ----------------------
+
 	GA_RWHandleV3 p_handle(gdp->getP());
 	GA_Attribute* v_attrib = gdp->findFloatTuple(GA_ATTRIB_POINT, "v", 3);
 	if (!v_attrib)
@@ -170,7 +179,7 @@ SOP_MPM::cookMySop(OP_Context &context)
 		UT_Vector3 pos = p_handle.get(ptoff);
 		UT_Vector3 vel = v_handle.get(ptoff);
 
-		vel.y() -= dt * 9.8f;
+		vel.y() -= dt * evalFloat("gravity", 0, now);
 
 		if (pos.y() < 0.001f) {
 			vel.y() = -vel.y() * 0.8f;
@@ -182,7 +191,7 @@ SOP_MPM::cookMySop(OP_Context &context)
 		p_handle.set(ptoff, pos);
 	}
 
-	// End of MPM code
+	// ------------------- End of Simulation ----------------------
 
 	unlockInputs();
 
