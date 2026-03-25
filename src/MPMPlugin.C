@@ -148,7 +148,7 @@ SOP_MPM::cookMySop(OP_Context& context)
     fpreal dt = 1.0 / fps;
 
     int substeps = SYSmax(evalInt("substeps", 0, now), 1);
-    fpreal timescale = evalFloat("timescale", 0, now);
+    int timescale = SYSmax(evalInt("timescale", 0, now), 1);
     dt = dt / (fpreal)substeps * timescale;
 
     int restart = evalInt("restart_frame", 0, now);

@@ -64,6 +64,6 @@ set(CUSTOM_DSO_DIR $ENV{CUSTOM_DSO_PATH})
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
     "$<TARGET_FILE:${PROJECT_NAME}>"
-    "${CUSTOM_DSO_DIR}"
+    "${CUSTOM_DSO_DIR}/"
     COMMENT "Copying ${PROJECT_NAME}.dll to CUSTOM_DSO_PATH directory"
 )
