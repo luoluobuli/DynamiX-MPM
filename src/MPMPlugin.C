@@ -107,6 +107,8 @@ SOP_MPM::myConstructor(OP_Network *net, const char *name, OP_Operator *op)
 SOP_MPM::SOP_MPM(OP_Network *net, const char *name, OP_Operator *op)
 	: SOP_Node(net, name, op)
 {
+	params.init();
+	solver.init(params);
 }
 
 SOP_MPM::~SOP_MPM() {}
@@ -117,16 +119,34 @@ SOP_MPM::disableParms()
     return 0;
 }
 
+void SOP_MPM::writeBack() {
+	GA_Offset outoff;
+	int i = 0;
+	GA_FOR_ALL_PTOFF(gdp, outoff)
+	{
+		const Particle& p = solver.getParticle(i);
+		gdp->setPos3(outoff, UT_Vector3(p.pos.x, p.pos.y, p.pos.z));
+		++i;
+	}
+}
+
 OP_ERROR
 SOP_MPM::cookMySop(OP_Context &context)
 {
 	fpreal now = context.getTime();
 
-	if (lockInputs(context) >= UT_ERROR_ABORT)
+	if (lockInputs(context) >= UT_ERROR_ABORT) {
 		return error();
+	}
 
 	// Copy the input geometry (input 0) into the output.
-	duplicateSource(0, context);
+	duplicatePointSource(0, context);
+	const GU_Detail* input = inputGeo(0, context);
+	if (!input)
+	{
+		unlockInputs();
+		return error();
+	}
 
 	// ------------------- Playback Control ----------------------
 	
@@ -136,65 +156,97 @@ SOP_MPM::cookMySop(OP_Context &context)
 	// Reset simulation state if time goes backwards or if substeps changes
 	bool reset = false;
 
-	if (myPrevTime < 0)
+	if (prevTime < 0) {
 		reset = true;
-	else if (t < myPrevTime)
+	}
+	else if (t < prevTime) {
 		reset = true;
+	}
+	else if (solver.getParticleCount() != input->getNumPoints()) {
+		reset = true;
+	}
 
 	if (reset)
 	{
-		// 1. destroy / clear old solver state
-		// 2. rebuild particles from Houdini input
-		// 3. rebuild grid from current params
-		// 4. set bookkeeping
-		myPrevTime = t;
-		return error();
-	}
+		params.init();
+		params.gravity = evalFloat("gravity", 0, now);
+		solver.init(params);
 
-	fpreal dt = t - myPrevTime;
+		GA_Offset ptoff;
+		GA_FOR_ALL_PTOFF(input, ptoff)
+		{
+			UT_Vector3 P = input->getPos3(ptoff);
 
-	myPrevTime = t;
+			Particle p;
+			p.pos = glm::vec3(P.x(), P.y(), P.z());
+			p.vel = glm::vec3(0.f);
+			p.mass = 1.0f;
 
-	// ------------------- Simulation ----------------------
-
-	GA_RWHandleV3 p_handle(gdp->getP());
-	GA_Attribute* v_attrib = gdp->findFloatTuple(GA_ATTRIB_POINT, "v", 3);
-	if (!v_attrib)
-		v_attrib = gdp->addFloatTuple(GA_ATTRIB_POINT, "v", 3);
-
-	GA_RWHandleV3 v_handle(v_attrib);
-
-	if (!p_handle.isValid() || !v_handle.isValid())
-	{
-		unlockInputs();
-		addError(SOP_MESSAGE, "Failed to access P or v.");
-		return error();
-	}
-
-	GA_Iterator it(gdp->getPointRange());
-	for (; !it.atEnd(); ++it)
-	{
-		GA_Offset ptoff = *it;
-
-		UT_Vector3 pos = p_handle.get(ptoff);
-		UT_Vector3 vel = v_handle.get(ptoff);
-
-		vel.y() -= dt * evalFloat("gravity", 0, now);
-
-		if (pos.y() < 0.001f) {
-			vel.y() = -vel.y() * 0.8f;
+			solver.addParticle(p);
 		}
 
-		pos += dt * vel;
-
-		v_handle.set(ptoff, vel);
-		p_handle.set(ptoff, pos);
+		// Write initial positions back to output just to stay consistent
+		writeBack();
+		prevTime = t;
+		unlockInputs();
+		return error();
 	}
 
-	// ------------------- End of Simulation ----------------------
+	fpreal dt = t - prevTime;
+	prevTime = t;
 
+	// ------------------- Simulation ----------------------
+	params.init();
+	params.gravity = evalFloat("gravity", 0, now);
+	params.dt = dt;
+
+	solver.setParams(params);
+
+	solver.step();
+	
+	// ------------------- Write back ----------------------
+	writeBack();
 	unlockInputs();
+	return error();
 
-    return error();
+	//GA_RWHandleV3 p_handle(gdp->getP());
+	//GA_Attribute* v_attrib = gdp->findFloatTuple(GA_ATTRIB_POINT, "v", 3);
+	//if (!v_attrib)
+	//	v_attrib = gdp->addFloatTuple(GA_ATTRIB_POINT, "v", 3);
+
+	//GA_RWHandleV3 v_handle(v_attrib);
+
+	//if (!p_handle.isValid() || !v_handle.isValid())
+	//{
+	//	unlockInputs();
+	//	addError(SOP_MESSAGE, "Failed to access P or v.");
+	//	return error();
+	//}
+
+	//GA_Iterator it(gdp->getPointRange());
+	//for (; !it.atEnd(); ++it)
+	//{
+	//	GA_Offset ptoff = *it;
+
+	//	UT_Vector3 pos = p_handle.get(ptoff);
+	//	UT_Vector3 vel = v_handle.get(ptoff);
+
+	//	vel.y() -= dt * evalFloat("gravity", 0, now);
+
+	//	if (pos.y() < 0.001f) {
+	//		vel.y() = -vel.y() * 0.8f;
+	//	}
+
+	//	pos += dt * vel;
+
+	//	v_handle.set(ptoff, vel);
+	//	p_handle.set(ptoff, pos);
+	//}
+
+	//// ------------------- End of Simulation ----------------------
+
+	//unlockInputs();
+
+ //   return error();
 }
 

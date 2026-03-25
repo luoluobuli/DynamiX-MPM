@@ -1,11 +1,116 @@
 #include "Solver.h"
 
-Solver::Solver() {}
-Solver::~Solver() {}
+int Solver::cellIndex(int i, int j, int k) {
+	return i + j * params.gridRes.x + k * params.gridRes.x * params.gridRes.y;
+}
+
+void Solver::step() {
+	clearGrid();
+	particleToGrid();
+	updateGrid();
+	gridToParticle();
+}
 
 void Solver::clearGrid() {
-	grid.clear();
+	for (auto& cell : gridCells) {
+		cell.m = 0.0f;
+		cell.v = glm::vec3(0.0f);
+	}
 }
 
 void Solver::particleToGrid() {
+	float invCellSize = 1.f / params.cellSize;
+
+	for (const auto& p : particles) {
+		// Find particle's grid coordinates
+		glm::vec3 gridCoord = (p.pos - params.gridOrigin) * invCellSize;
+
+		// Find the base cell& neighboring cells
+		// Linear interpolation now; move to quadradic later
+		int x = floor(gridCoord.x);
+		int y = floor(gridCoord.y);
+		int z = floor(gridCoord.z);
+
+		float fx = gridCoord.x - x;
+		float fy = gridCoord.y - y;
+		float fz = gridCoord.z - z;
+
+		float wx[2] = { 1.0f - fx, fx };
+		float wy[2] = { 1.0f - fy, fy };
+		float wz[2] = { 1.0f - fz, fz };
+
+		for (int i = 0; i <= 1; ++i) {
+			for (int j = 0; j <= 1; ++j) {
+				for (int k = 0; k <= 1; ++k) {
+					int cellX = x + i;
+					int cellY = y + j;
+					int cellZ = z + k;
+					// Check bounds
+					if (cellX < 0 || cellX >= params.gridRes.x ||
+						cellY < 0 || cellY >= params.gridRes.y ||
+						cellZ < 0 || cellZ >= params.gridRes.z) {
+						continue;
+					}
+
+					// Compute weight
+					float w = wx[i] * wy[j] * wz[k];
+
+					GridCell& cell = gridCells[cellIndex(cellX, cellY, cellZ)];
+					cell.m += w * p.mass;
+					cell.v += w * p.mass * p.vel;
+				}
+			}
+		}
+	}
+}
+
+void Solver::updateGrid() {
+	for (auto& cell : gridCells) {
+		if (cell.m > 0.0f) {
+			cell.v /= cell.m;
+			cell.v.y -= params.gravity * params.dt;
+		}
+	}
+}
+
+void Solver::gridToParticle() {
+	float invCellSize = 1.f / params.cellSize;
+
+	for (auto& p : particles) {
+		glm::vec3 gridCoord = (p.pos - params.gridOrigin) * invCellSize;
+
+		int x = floor(gridCoord.x);
+		int y = floor(gridCoord.y);
+		int z = floor(gridCoord.z);
+
+		float fx = gridCoord.x - x;
+		float fy = gridCoord.y - y;
+		float fz = gridCoord.z - z;
+
+		float wx[2] = { 1.0f - fx, fx };
+		float wy[2] = { 1.0f - fy, fy };
+		float wz[2] = { 1.0f - fz, fz };
+
+		glm::vec3 newVel(0.0f);
+
+		for (int i = 0; i <= 1; ++i) {
+			for (int j = 0; j <= 1; ++j) {
+				for (int k = 0; k <= 1; ++k) {
+					int cellX = x + i;
+					int cellY = y + j;
+					int cellZ = z + k;
+					if (cellX < 0 || cellX >= params.gridRes.x ||
+						cellY < 0 || cellY >= params.gridRes.y ||
+						cellZ < 0 || cellZ >= params.gridRes.z) {
+						continue;
+					}
+					float w = wx[i] * wy[j] * wz[k];
+					GridCell& cell = gridCells[cellIndex(cellX, cellY, cellZ)];
+					newVel += w * cell.v;
+				}
+			}
+		}
+		p.vel = newVel;
+		p.pos += p.vel * params.dt;
+	}
 }
