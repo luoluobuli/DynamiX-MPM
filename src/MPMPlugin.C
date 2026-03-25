@@ -1,6 +1,4 @@
 #include <UT/UT_DSOVersion.h>
-//#include <RE/RE_EGLServer.h>
-
 
 #include <UT/UT_Math.h>
 #include <UT/UT_Interrupt.h>
@@ -12,21 +10,13 @@
 #include <OP/OP_Operator.h>
 #include <OP/OP_OperatorTable.h>
 #include <CH/CH_Manager.h>
+#include <GEO/GEO_PrimPoly.h>
 
 #include <iostream>
 #include <limits.h>
 #include "MPMPlugin.h"
 
 using namespace HDK_Sample;
-
-//
-// Help is stored in a "wiki" style text file. 
-//
-// See the sample_install.sh file for an example.
-//
-// NOTE : Follow this tutorial if you have any problems setting up your visual studio 2008 for Houdini 
-//  http://www.apileofgrains.nl/setting-up-the-hdk-for-houdini-12-with-visual-studio-2008/
-
 
 ///
 /// newSopOperator is the hook that Houdini grabs from this dll
@@ -49,11 +39,7 @@ newSopOperator(OP_OperatorTable *table)
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-//PUT YOUR CODE HERE
-//You need to declare your parameters here
-//Example to declare a variable for angle you can do like this :
-//static PRM_Name		angleName("angle", "Angle");
-
+// Declare parameters
 static PRM_Name gravityName("gravity", "Gravity");
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -61,31 +47,21 @@ static PRM_Name gravityName("gravity", "Gravity");
 //				     internal    descriptive version
 
 
-// PUT YOUR CODE HERE
-// You need to setup the initial/default values for your parameters here
-// For example : If you are declaring the inital value for the angle parameter
-// static PRM_Default angleDefault(30.0);	
-
+// Setup the initial/default values for parameters
 static PRM_Default gravityDefault(9.8);
+
+// Setup the range for parameters
+static PRM_Range gravityRange(PRM_RANGE_UI, 0, PRM_RANGE_UI, 30);
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
 PRM_Template
 SOP_MPM::myTemplateList[] = {
-// PUT YOUR CODE HERE
-// You now need to fill this template with your parameter name and their default value
-// EXAMPLE : For the angle parameter this is how you should add into the template
-// PRM_Template(PRM_FLT,	PRM_Template::PRM_EXPORT_MIN, 1, &angleName, &angleDefault, 0),
-// Similarly add all the other parameters in the template format here
-
-
-/////////////////////////////////////////////////////////////////////////////////////////////
-
-	PRM_Template(PRM_FLT, 1, &gravityName, &gravityDefault),
+	PRM_Template(PRM_FLT, 1, &gravityName, &gravityDefault, 0, &gravityRange),
     PRM_Template()
 };
 
-
+// Note from Joanne: we are not using it, but I'm keeping this part in case we need it in the future
 // Here's how we define local variables for the SOP.
 enum {
 	VAR_PT,		// Point number of the star
@@ -208,45 +184,4 @@ SOP_MPM::cookMySop(OP_Context &context)
 	writeBack();
 	unlockInputs();
 	return error();
-
-	//GA_RWHandleV3 p_handle(gdp->getP());
-	//GA_Attribute* v_attrib = gdp->findFloatTuple(GA_ATTRIB_POINT, "v", 3);
-	//if (!v_attrib)
-	//	v_attrib = gdp->addFloatTuple(GA_ATTRIB_POINT, "v", 3);
-
-	//GA_RWHandleV3 v_handle(v_attrib);
-
-	//if (!p_handle.isValid() || !v_handle.isValid())
-	//{
-	//	unlockInputs();
-	//	addError(SOP_MESSAGE, "Failed to access P or v.");
-	//	return error();
-	//}
-
-	//GA_Iterator it(gdp->getPointRange());
-	//for (; !it.atEnd(); ++it)
-	//{
-	//	GA_Offset ptoff = *it;
-
-	//	UT_Vector3 pos = p_handle.get(ptoff);
-	//	UT_Vector3 vel = v_handle.get(ptoff);
-
-	//	vel.y() -= dt * evalFloat("gravity", 0, now);
-
-	//	if (pos.y() < 0.001f) {
-	//		vel.y() = -vel.y() * 0.8f;
-	//	}
-
-	//	pos += dt * vel;
-
-	//	v_handle.set(ptoff, vel);
-	//	p_handle.set(ptoff, pos);
-	//}
-
-	//// ------------------- End of Simulation ----------------------
-
-	//unlockInputs();
-
- //   return error();
 }
-
