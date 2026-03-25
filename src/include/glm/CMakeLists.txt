@@ -17,6 +17,8 @@ file(GLOB_RECURSE GTX_SOURCE ./gtx/*.cpp)
 file(GLOB_RECURSE GTX_INLINE ./gtx/*.inl)
 file(GLOB_RECURSE GTX_HEADER ./gtx/*.hpp)
 
+target_include_directories(your_target PRIVATE src)
+
 source_group("Text Files" FILES ${ROOT_TEXT})
 source_group("Core Files" FILES ${CORE_SOURCE})
 source_group("Core Files" FILES ${CORE_INLINE})

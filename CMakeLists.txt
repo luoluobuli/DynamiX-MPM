@@ -24,18 +24,21 @@ endif()
 include_directories(
     "${HOUDINI_INSTALL_PATH}/toolkit/include"
     "."
+    "src/include"
 )
 
 set(SOURCE_FILES
     src/MPMPlugin.C
-    src/main.cpp
     src/vec.cpp
+    src/solver.cpp
 )
 
 set(HEADER_FILES
     src/MPMPlugin.h
     src/matrix.h
     src/vec.h
+    src/common.h
+    src/solver.h
 )
 
 add_library(${PROJECT_NAME} SHARED ${SOURCE_FILES} ${HEADER_FILES})

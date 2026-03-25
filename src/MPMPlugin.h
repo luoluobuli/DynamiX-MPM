@@ -6,6 +6,7 @@
 //#include <GEO/GEO_Point.h>
 //
 #include <SOP/SOP_Node.h>
+#include "solver.h"
 
 namespace HDK_Sample {
 class SOP_MPM : public SOP_Node
@@ -47,6 +48,8 @@ protected:
 				     return evalVariableValue(v, i, thread);
 				 }
 
+    void writeBack();
+
 private:
     /// The following list of accessors simplify evaluating the parameters
     /// of the SOP.
@@ -66,7 +69,9 @@ private:
     /// Another use for local data is a cache to store expensive calculations.
 
 	// NOTE : You can declare local variables here
-    fpreal myPrevTime = -1.0;
+	Solver solver;
+    Params params;
+    fpreal prevTime = -1.0;
 };
 } // End HDK_Sample namespace
 
