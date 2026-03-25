@@ -43,8 +43,7 @@ newSopOperator(OP_OperatorTable *table)
 			SOP_MPM::myConstructor,	// How to build the SOP
 			SOP_MPM::myTemplateList,	// My parameters
 			1,				// Min # of sources
-			1,				// Max # of sources
-			SOP_MPM::myVariables // Local variables
+			1				// Max # of sources
 		)
 	);
 }
@@ -55,8 +54,7 @@ newSopOperator(OP_OperatorTable *table)
 //Example to declare a variable for angle you can do like this :
 //static PRM_Name		angleName("angle", "Angle");
 
-static PRM_Name dtName("substeps", "Sub Steps");
-
+static PRM_Name gravityName("gravity", "Gravity");
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //				     ^^^^^^^^    ^^^^^^^^^^^^^^^
@@ -68,7 +66,7 @@ static PRM_Name dtName("substeps", "Sub Steps");
 // For example : If you are declaring the inital value for the angle parameter
 // static PRM_Default angleDefault(30.0);	
 
-static PRM_Default dtDefault(4.0);
+static PRM_Default gravityDefault(9.8);
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
@@ -83,7 +81,7 @@ SOP_MPM::myTemplateList[] = {
 
 /////////////////////////////////////////////////////////////////////////////////////////////
 
-	PRM_Template(PRM_FLT, 1, &dtName, &dtDefault),
+	PRM_Template(PRM_FLT, 1, &gravityName, &gravityDefault),
     PRM_Template()
 };
 
@@ -92,13 +90,6 @@ SOP_MPM::myTemplateList[] = {
 enum {
 	VAR_PT,		// Point number of the star
 	VAR_NPT		// Number of points in the star
-};
-
-CH_LocalVariable
-SOP_MPM::myVariables[] = {
-    { "PT",	VAR_PT, 0 },		// The table provides a mapping
-    { "NPT",	VAR_NPT, 0 },		// from text string to integer token
-    { 0, 0, 0 },
 };
 
 bool
@@ -116,6 +107,8 @@ SOP_MPM::myConstructor(OP_Network *net, const char *name, OP_Operator *op)
 SOP_MPM::SOP_MPM(OP_Network *net, const char *name, OP_Operator *op)
 	: SOP_Node(net, name, op)
 {
+	params.init();
+	solver.init(params);
 }
 
 SOP_MPM::~SOP_MPM() {}
@@ -126,66 +119,134 @@ SOP_MPM::disableParms()
     return 0;
 }
 
+void SOP_MPM::writeBack() {
+	GA_Offset outoff;
+	int i = 0;
+	GA_FOR_ALL_PTOFF(gdp, outoff)
+	{
+		const Particle& p = solver.getParticle(i);
+		gdp->setPos3(outoff, UT_Vector3(p.pos.x, p.pos.y, p.pos.z));
+		++i;
+	}
+}
+
 OP_ERROR
 SOP_MPM::cookMySop(OP_Context &context)
 {
 	fpreal now = context.getTime();
 
-	if (lockInputs(context) >= UT_ERROR_ABORT)
+	if (lockInputs(context) >= UT_ERROR_ABORT) {
 		return error();
+	}
 
 	// Copy the input geometry (input 0) into the output.
-	duplicateSource(0, context);
-
-	std::cerr << "Frame time: " << now
-		<< "  num points: " << gdp->getNumPoints() << std::endl;
-
-	// Get dt
-	fpreal fps = CHgetManager()->getSamplesPerSec();
-	fpreal dt = 1.0 / fps;
-
-	int substeps = SYSmax(evalInt("substeps", 0, now), 1);
-	dt = dt / (fpreal)substeps;
-
-	// Compute
-	GA_RWHandleV3 p_handle(gdp->getP());
-	GA_Attribute* v_attrib = gdp->findFloatTuple(GA_ATTRIB_POINT, "v", 3);
-	if (!v_attrib)
-		v_attrib = gdp->addFloatTuple(GA_ATTRIB_POINT, "v", 3);
-
-	GA_RWHandleV3 v_handle(v_attrib);
-
-	if (!p_handle.isValid() || !v_handle.isValid())
+	duplicatePointSource(0, context);
+	const GU_Detail* input = inputGeo(0, context);
+	if (!input)
 	{
 		unlockInputs();
-		addError(SOP_MESSAGE, "Failed to access P or v.");
 		return error();
 	}
 
-	GA_Iterator it(gdp->getPointRange());
-	for (; !it.atEnd(); ++it)
-	{
-		GA_Offset ptoff = *it;
+	// ------------------- Playback Control ----------------------
+	
+	// Get dt
+	fpreal t = context.getTime();
 
-		UT_Vector3 pos = p_handle.get(ptoff);
-		UT_Vector3 vel = v_handle.get(ptoff);
+	// Reset simulation state if time goes backwards or if substeps changes
+	bool reset = false;
 
-		vel.y() -= dt * 9.8f;
-
-		if (pos.y() < 0.001f) {
-			vel.y() = -vel.y() * 0.8f;
-		}
-
-		pos += dt * vel;
-
-		v_handle.set(ptoff, vel);
-		p_handle.set(ptoff, pos);
+	if (prevTime < 0) {
+		reset = true;
+	}
+	else if (t < prevTime) {
+		reset = true;
+	}
+	else if (solver.getParticleCount() != input->getNumPoints()) {
+		reset = true;
 	}
 
-	// End of MPM code
+	if (reset)
+	{
+		params.init();
+		params.gravity = evalFloat("gravity", 0, now);
+		solver.init(params);
 
+		GA_Offset ptoff;
+		GA_FOR_ALL_PTOFF(input, ptoff)
+		{
+			UT_Vector3 P = input->getPos3(ptoff);
+
+			Particle p;
+			p.pos = glm::vec3(P.x(), P.y(), P.z());
+			p.vel = glm::vec3(0.f);
+			p.mass = 1.0f;
+
+			solver.addParticle(p);
+		}
+
+		// Write initial positions back to output just to stay consistent
+		writeBack();
+		prevTime = t;
+		unlockInputs();
+		return error();
+	}
+
+	fpreal dt = t - prevTime;
+	prevTime = t;
+
+	// ------------------- Simulation ----------------------
+	params.init();
+	params.gravity = evalFloat("gravity", 0, now);
+	params.dt = dt;
+
+	solver.setParams(params);
+
+	solver.step();
+	
+	// ------------------- Write back ----------------------
+	writeBack();
 	unlockInputs();
+	return error();
 
-    return error();
+	//GA_RWHandleV3 p_handle(gdp->getP());
+	//GA_Attribute* v_attrib = gdp->findFloatTuple(GA_ATTRIB_POINT, "v", 3);
+	//if (!v_attrib)
+	//	v_attrib = gdp->addFloatTuple(GA_ATTRIB_POINT, "v", 3);
+
+	//GA_RWHandleV3 v_handle(v_attrib);
+
+	//if (!p_handle.isValid() || !v_handle.isValid())
+	//{
+	//	unlockInputs();
+	//	addError(SOP_MESSAGE, "Failed to access P or v.");
+	//	return error();
+	//}
+
+	//GA_Iterator it(gdp->getPointRange());
+	//for (; !it.atEnd(); ++it)
+	//{
+	//	GA_Offset ptoff = *it;
+
+	//	UT_Vector3 pos = p_handle.get(ptoff);
+	//	UT_Vector3 vel = v_handle.get(ptoff);
+
+	//	vel.y() -= dt * evalFloat("gravity", 0, now);
+
+	//	if (pos.y() < 0.001f) {
+	//		vel.y() = -vel.y() * 0.8f;
+	//	}
+
+	//	pos += dt * vel;
+
+	//	v_handle.set(ptoff, vel);
+	//	p_handle.set(ptoff, pos);
+	//}
+
+	//// ------------------- End of Simulation ----------------------
+
+	//unlockInputs();
+
+ //   return error();
 }
 
