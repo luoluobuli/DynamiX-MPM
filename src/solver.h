@@ -16,12 +16,6 @@ public:
 	void updateGrid();
 	void gridToParticle();
 
-	void clear(Params params_in) {
-		particles.clear();
-		gridCells.clear();
-		params = params_in;
-	}
-
 	void init(Params params_in) {
 		particles.clear();
 		gridCells.clear();
@@ -46,6 +40,7 @@ public:
 
 	// Helper functions
 	int cellIndex(int i, int j, int k);
+	glm::mat3 computeStress(const Particle& p) const;
 
 private:
 	std::vector<Particle> particles;

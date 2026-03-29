@@ -170,6 +170,7 @@ SOP_MPM::cookMySop(OP_Context &context)
 			p.vel = glm::vec3(0.f);
 			p.mass = 1.0f;
 			p.F = glm::mat3(1.0f);
+			p.volume = params.cellSize * params.cellSize * params.cellSize;
 
 			particles.push_back(p);
 		}
@@ -183,11 +184,12 @@ SOP_MPM::cookMySop(OP_Context &context)
 		return error();
 	}
 
-	params.dt = t - prevTime;
+	float dt = t - prevTime;
 	prevTime = t;
 
 	// ------------------- Simulation ----------------------
 	setParameters(t);
+	params.dt = dt;
 	solver.setParams(params);
 	solver.step();
 	
