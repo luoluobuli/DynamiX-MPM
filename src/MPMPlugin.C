@@ -45,14 +45,14 @@ static PRM_Name youngName("young", "Young's Modulus");
 static PRM_Name poissonName("poisson", "Poisson's Ratio");
 
 // Setup the initial/default values for parameters
-static PRM_Default gravityDefault(9.8);
-static PRM_Default youngDefault(1e4);
+static PRM_Default gravityDefault(9.8f);
+static PRM_Default youngDefault(10.f);
 static PRM_Default poissonDefault(0.2f);
 
 // Setup the range for parameters
-static PRM_Range gravityRange(PRM_RANGE_UI, 0, PRM_RANGE_UI, 30);
-static PRM_Range youngRange(PRM_RANGE_UI, 1.0f, PRM_RANGE_UI, 1e6f);
-static PRM_Range poissonRange(PRM_RANGE_RESTRICTED, 0.0f, PRM_RANGE_RESTRICTED, 0.49f);
+static PRM_Range gravityRange(PRM_RANGE_UI, 0.f, PRM_RANGE_UI, 30);
+static PRM_Range youngRange(PRM_RANGE_UI, 0.f, PRM_RANGE_UI, 50.f);
+static PRM_Range poissonRange(PRM_RANGE_RESTRICTED, 0.f, PRM_RANGE_RESTRICTED, 0.49f);
 
 ////////////////////////////////////////////////////////////////////////////////////////
 

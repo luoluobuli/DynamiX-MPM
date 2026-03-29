@@ -4,17 +4,6 @@ int Solver::cellIndex(int i, int j, int k) {
 	return i + j * params.gridRes.x + k * params.gridRes.x * params.gridRes.y;
 }
 
-glm::mat3 Solver::computeStress(const Particle& p) const
-{
-	float J = glm::determinant(p.F);
-	J = glm::max(J, 1e-6f);
-
-	glm::mat3 FinvT = glm::transpose(glm::inverse(p.F));
-
-	return params.mu * (p.F - FinvT)
-		+ params.lambda * log(J) * FinvT;
-}
-
 void Solver::step() {
 	clearGrid();
 	particleToGrid();

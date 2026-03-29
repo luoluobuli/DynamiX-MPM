@@ -40,7 +40,6 @@ public:
 
 	// Helper functions
 	int cellIndex(int i, int j, int k);
-	glm::mat3 computeStress(const Particle& p) const;
 
 private:
 	std::vector<Particle> particles;
