@@ -33,23 +33,26 @@ newSopOperator(OP_OperatorTable *table)
 			SOP_MPM::myConstructor,	// How to build the SOP
 			SOP_MPM::myTemplateList,	// My parameters
 			1,				// Min # of sources
-			1				// Max # of sources
+			2				// Max # of sources
 		)
 	);
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // Declare parameters
+static PRM_Name substepsName("substeps", "Substeps");
 static PRM_Name gravityName("gravity", "Gravity");
 static PRM_Name youngName("young", "Young's Modulus");
 static PRM_Name poissonName("poisson", "Poisson's Ratio");
 
 // Setup the initial/default values for parameters
+static PRM_Default substepsDefault(1);
 static PRM_Default gravityDefault(9.8f);
 static PRM_Default youngDefault(10.f);
 static PRM_Default poissonDefault(0.2f);
 
 // Setup the range for parameters
+static PRM_Range substepsRange(PRM_RANGE_UI, 1, PRM_RANGE_UI, 10);
 static PRM_Range gravityRange(PRM_RANGE_UI, 0.f, PRM_RANGE_UI, 30);
 static PRM_Range youngRange(PRM_RANGE_UI, 0.f, PRM_RANGE_UI, 50.f);
 static PRM_Range poissonRange(PRM_RANGE_RESTRICTED, 0.f, PRM_RANGE_RESTRICTED, 0.49f);
@@ -58,6 +61,7 @@ static PRM_Range poissonRange(PRM_RANGE_RESTRICTED, 0.f, PRM_RANGE_RESTRICTED, 0
 
 PRM_Template
 SOP_MPM::myTemplateList[] = {
+	PRM_Template(PRM_INT, 1, &substepsName, &substepsDefault, 0, &substepsRange),
 	PRM_Template(PRM_FLT, 1, &gravityName, &gravityDefault, 0, &gravityRange),
 	PRM_Template(PRM_FLT, 1, &youngName, &youngDefault, 0, &youngRange),
 	PRM_Template(PRM_FLT, 1, &poissonName, &poissonDefault, 0, &poissonRange),
@@ -128,17 +132,37 @@ SOP_MPM::cookMySop(OP_Context &context)
 
 	// Copy the input geometry (input 0) into the output.
 	duplicatePointSource(0, context);
-	const GU_Detail* input = inputGeo(0, context);
-	if (!input)
-	{
+	const GU_Detail* particlesGeo = inputGeo(0, context);
+	const GU_Detail* boxGeo = inputGeo(1, context);
+
+	if (!particlesGeo || !boxGeo) {
 		unlockInputs();
 		return error();
 	}
+
+	UT_BoundingBox bbox;
+	boxGeo->getBBox(&bbox);
+	if (!bbox.isValid()) return error();
+
+	UT_Vector3 minPos = bbox.minvec();
+	UT_Vector3 maxPos = bbox.maxvec();
+	UT_Vector3 size = maxPos - minPos;
+
+	params.gridOrigin = glm::vec3(minPos.x(), minPos.y(), minPos.z());
+
+	float dxX = static_cast<float>(size.x()) / params.gridRes.x;
+	float dxY = static_cast<float>(size.y()) / params.gridRes.y;
+	float dxZ = static_cast<float>(size.z()) / params.gridRes.z;
+
+	params.cellSize = glm::min(dxX, glm::min(dxY, dxZ));
 
 	// ------------------- Playback Control ----------------------
 	
 	// Get dt
 	fpreal t = context.getTime();
+
+	int substeps = evalInt("substeps", 0, t);
+	if (substeps < 1) substeps = 1;
 
 	// Reset simulation state if time goes backwards or if substeps changes
 	bool reset = false;
@@ -149,7 +173,7 @@ SOP_MPM::cookMySop(OP_Context &context)
 	else if (t < prevTime) {
 		reset = true;
 	}
-	else if (solver.getParticleCount() != input->getNumPoints()) {
+	else if (solver.getParticleCount() != particlesGeo->getNumPoints()) {
 		reset = true;
 	}
 
@@ -161,9 +185,9 @@ SOP_MPM::cookMySop(OP_Context &context)
 		std::vector<Particle> particles;
 
 		GA_Offset ptoff;
-		GA_FOR_ALL_PTOFF(input, ptoff)
+		GA_FOR_ALL_PTOFF(particlesGeo, ptoff)
 		{
-			UT_Vector3 P = input->getPos3(ptoff);
+			UT_Vector3 P = particlesGeo->getPos3(ptoff);
 
 			Particle p;
 			p.pos = glm::vec3(P.x(), P.y(), P.z());
@@ -184,14 +208,19 @@ SOP_MPM::cookMySop(OP_Context &context)
 		return error();
 	}
 
-	float dt = t - prevTime;
+	float frameDt = t - prevTime;
 	prevTime = t;
 
 	// ------------------- Simulation ----------------------
 	setParameters(t);
-	params.dt = dt;
-	solver.setParams(params);
-	solver.step();
+
+	float subDt = frameDt / (float)substeps;
+	for (int s = 0; s < substeps; ++s)
+	{
+		params.dt = subDt;
+		solver.setParams(params);
+		solver.step();
+	}
 	
 	// ------------------- Write back ----------------------
 	writeBack();

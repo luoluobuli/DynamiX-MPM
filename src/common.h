@@ -8,7 +8,7 @@ struct Params
 	float dt;
 
 	glm::ivec3 gridRes = glm::ivec3(16, 16, 16);
-	glm::vec3 gridOrigin = glm::vec3(0.0f);
+	glm::vec3 gridOrigin = glm::vec3(-0.5f);
 	float cellSize = 1.0f;
 
 	float mu;
