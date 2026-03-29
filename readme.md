@@ -1,4 +1,4 @@
-# DynaMIX: Houdini Custom MPM Plugin
+# DynamiX: Houdini Custom MPM Plugin
 
 ## Overview
 

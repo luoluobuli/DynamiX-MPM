@@ -17,7 +17,6 @@ struct Params
 
 struct Particle
 {
-public:
 	glm::vec3 pos;
 	glm::vec3 vel;
 	float mass;

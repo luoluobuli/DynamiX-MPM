@@ -41,19 +41,28 @@ newSopOperator(OP_OperatorTable *table)
 
 // Declare parameters
 static PRM_Name substepsName("substeps", "Substeps");
+static PRM_Name gridResName("gridRes", "Grid Resolution");
 static PRM_Name gravityName("gravity", "Gravity");
+static PRM_Name massName("mass", "Mass");
+
 static PRM_Name youngName("young", "Young's Modulus");
 static PRM_Name poissonName("poisson", "Poisson's Ratio");
 
 // Setup the initial/default values for parameters
 static PRM_Default substepsDefault(1);
+static PRM_Default gridResDefault(16);
 static PRM_Default gravityDefault(9.8f);
+static PRM_Default massDefault(1.f);
+
 static PRM_Default youngDefault(10.f);
 static PRM_Default poissonDefault(0.2f);
 
 // Setup the range for parameters
 static PRM_Range substepsRange(PRM_RANGE_UI, 1, PRM_RANGE_UI, 10);
+static PRM_Range gridResRange(PRM_RANGE_UI, 8, PRM_RANGE_UI, 128);
 static PRM_Range gravityRange(PRM_RANGE_UI, 0.f, PRM_RANGE_UI, 30);
+static PRM_Range massRange(PRM_RANGE_UI, 0.1f, PRM_RANGE_UI, 5.f);
+
 static PRM_Range youngRange(PRM_RANGE_UI, 0.f, PRM_RANGE_UI, 50.f);
 static PRM_Range poissonRange(PRM_RANGE_RESTRICTED, 0.f, PRM_RANGE_RESTRICTED, 0.49f);
 
@@ -62,7 +71,11 @@ static PRM_Range poissonRange(PRM_RANGE_RESTRICTED, 0.f, PRM_RANGE_RESTRICTED, 0
 PRM_Template
 SOP_MPM::myTemplateList[] = {
 	PRM_Template(PRM_INT, 1, &substepsName, &substepsDefault, 0, &substepsRange),
+	PRM_Template(PRM_INT, 1, &gridResName, &gridResDefault, 0, &gridResRange),
 	PRM_Template(PRM_FLT, 1, &gravityName, &gravityDefault, 0, &gravityRange),
+	PRM_Template(PRM_FLT, 1, &massName, &massDefault, 0, &massRange),
+
+
 	PRM_Template(PRM_FLT, 1, &youngName, &youngDefault, 0, &youngRange),
 	PRM_Template(PRM_FLT, 1, &poissonName, &poissonDefault, 0, &poissonRange),
     PRM_Template()
@@ -112,6 +125,7 @@ void SOP_MPM::writeBack() {
 }
 
 void SOP_MPM::setParameters(float t) {
+	params.gridRes = glm::vec3(evalInt("gridRes", 0, t));
 	params.gravity = evalFloat("gravity", 0, t);
 
 	float E = evalFloat("young", 0, t);
@@ -132,10 +146,11 @@ SOP_MPM::cookMySop(OP_Context &context)
 
 	// Copy the input geometry (input 0) into the output.
 	duplicatePointSource(0, context);
+
 	const GU_Detail* particlesGeo = inputGeo(0, context);
 	const GU_Detail* boxGeo = inputGeo(1, context);
 
-	if (!particlesGeo || !boxGeo) {
+	if (!particlesGeo || !boxGeo ) {
 		unlockInputs();
 		return error();
 	}
@@ -147,14 +162,13 @@ SOP_MPM::cookMySop(OP_Context &context)
 	UT_Vector3 minPos = bbox.minvec();
 	UT_Vector3 maxPos = bbox.maxvec();
 	UT_Vector3 size = maxPos - minPos;
+	if (size.x() != size.y() || size.x() != size.z() || size.y() != size.z()) {
+		std::cerr << "The domain needs to be a cube!" << std::endl;
+		return error();
+	}
 
 	params.gridOrigin = glm::vec3(minPos.x(), minPos.y(), minPos.z());
-
-	float dxX = static_cast<float>(size.x()) / params.gridRes.x;
-	float dxY = static_cast<float>(size.y()) / params.gridRes.y;
-	float dxZ = static_cast<float>(size.z()) / params.gridRes.z;
-
-	params.cellSize = glm::min(dxX, glm::min(dxY, dxZ));
+	params.cellSize = (float)size.x() / params.gridRes.x;
 
 	// ------------------- Playback Control ----------------------
 	
@@ -192,7 +206,7 @@ SOP_MPM::cookMySop(OP_Context &context)
 			Particle p;
 			p.pos = glm::vec3(P.x(), P.y(), P.z());
 			p.vel = glm::vec3(0.f);
-			p.mass = 1.0f;
+			p.mass = evalFloat("mass", 0, t);
 			p.F = glm::mat3(1.0f);
 			p.volume = params.cellSize * params.cellSize * params.cellSize;
 
