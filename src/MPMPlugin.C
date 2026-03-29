@@ -162,6 +162,8 @@ SOP_MPM::cookMySop(OP_Context &context)
 		return error();
 	}
 
+	// later: maybe a custom node to define the domain with resolution & cell size
+	// instead of using a box geometry
 	UT_BoundingBox bbox;
 	boxGeo->getBBox(&bbox);
 	if (!bbox.isValid()) return error();
@@ -212,10 +214,11 @@ SOP_MPM::cookMySop(OP_Context &context)
 
 			Particle p;
 			p.pos = glm::vec3(P.x(), P.y(), P.z());
-			p.vel = glm::vec3(0.f);
+			p.vel = glm::vec3(1.f, 0.f, 0.f);
 			p.mass = evalFloat("mass", 0, t);
 			p.F = glm::mat3(1.0f);
 			p.volume = params.cellSize * params.cellSize * params.cellSize;
+			p.Jp = 1.0f;
 
 			particles.push_back(p);
 		}

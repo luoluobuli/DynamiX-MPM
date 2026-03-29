@@ -7,12 +7,15 @@ struct Params
 	float gravity;
 	float dt;
 
-	glm::ivec3 gridRes = glm::ivec3(16, 16, 16);
-	glm::vec3 gridOrigin = glm::vec3(-0.5f);
-	float cellSize = 1.0f;
+	glm::ivec3 gridRes;
+	glm::vec3 gridOrigin;
+	float cellSize;
 
 	float mu;
 	float lambda;
+
+	float thetaC = 2.5e-2;
+	float thetaS = 7.5e-3;
 };
 
 struct Particle
@@ -22,6 +25,7 @@ struct Particle
 	float mass;
 	float volume;
 	glm::mat3 F;
+	float Jp;
 };
 
 struct GridCell

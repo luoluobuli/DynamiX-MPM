@@ -152,10 +152,27 @@ void Solver::gridToParticle() {
 		}
 		p.vel = newVel;
 		p.pos += p.vel * params.dt;
+
+		// Elastic deformation
 		p.F = (glm::mat3(1.0f) + params.dt * gradVel) * p.F;
 		float J = glm::determinant(p.F);
-		if (!std::isfinite(J) || J <= 1e-6f) {
+
+		// Plastic deformation
+		if (std::isfinite(J) && J > 1e-6f)
+		{
+			float Jmin = 1.0f - params.thetaC;
+			float Jmax = 1.0f + params.thetaS;
+
+			float clampedJ = glm::clamp(J, Jmin, Jmax);
+			float scale = cbrtf(clampedJ / J);
+			p.F *= scale;
+
+			p.Jp *= J / clampedJ;
+		}
+		else
+		{
 			p.F = glm::mat3(1.0f);
+			p.Jp = 1.0f;
 		}
 	}
 }
