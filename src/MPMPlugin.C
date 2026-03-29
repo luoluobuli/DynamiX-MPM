@@ -13,6 +13,8 @@
 #include <OP/OP_OperatorTable.h>
 #include <CH/CH_Manager.h>
 #include <SOP/SOP_Node.h>
+#include <OP/OP_Director.h>
+#include <CMD/CMD_Manager.h>
 
 #include <iostream>
 #include <stdlib.h>
@@ -36,7 +38,7 @@ newSopOperator(OP_OperatorTable* table)
             SOP_MPM::myConstructor,	// How to build the SOP
             SOP_MPM::myTemplateList,	// My parameters
             1,				// Min # of sources
-            1,				// Max # of sources
+            3,				// Max # of sources
             SOP_MPM::myVariables // Local variables
         )
     );
@@ -44,27 +46,29 @@ newSopOperator(OP_OperatorTable* table)
 
 // declare parameters here
 static PRM_Name dtName("substeps", "Sub Steps");
-static PRM_Name emitterName("emitter", "Enable Emitter");
-static PRM_Name restartName("restart_frame", "Restart From Frame");
+static PRM_Name resetName("reset_sim", "Reset Simulation");
 static PRM_Name timescaleName("timescale", "Time Scale");
-static PRM_Name emitrateName("emitrate", "Emit Per Burst"); 
+static PRM_Name emitterName("emitter", "Enable Emitter");
+static PRM_Name emitrateName("emitrate", "Emit Per Burst");
+static PRM_Name gravityName("gravity", "Gravity");
+
 
 //setup the initial/default values for parameters here
 static PRM_Default dtDefault(4.0);
 static PRM_Default emitterDefault(1);
-static PRM_Default restartDefault(1);
 static PRM_Default timescaleDefault(0.3);
 static PRM_Default emitrateDefault(3.0);
-
+static PRM_Default gravityDefault(9.8);
 ////////////////////////////////////////////////////////////////////////////////////////
 
 PRM_Template
 SOP_MPM::myTemplateList[] = {
-    PRM_Template(PRM_FLT, 1, &dtName, &dtDefault),
+    PRM_Template(PRM_CALLBACK, 1, &resetName, 0, 0, 0, SOP_MPM::resetSimulation),
+    PRM_Template(PRM_INT, 1, &dtName, &dtDefault),
+    PRM_Template(PRM_FLT, 1, &timescaleName, &timescaleDefault),
     PRM_Template(PRM_TOGGLE, 1, &emitterName, &emitterDefault),
-    PRM_Template(PRM_INT, 1, &restartName, &restartDefault),
-    PRM_Template(PRM_FLT, 1, &timescaleName, &timescaleDefault), 
     PRM_Template(PRM_INT, 1, &emitrateName, &emitrateDefault),
+    PRM_Template(PRM_FLT, 1, &gravityName, &gravityDefault),
     PRM_Template()
 };
 
@@ -115,20 +119,63 @@ getVelHandle(GU_Detail* gdp)
     return GA_RWHandleV3(v_attrib);
 }
 
-// cp is position cache, cv is velocity cache for all particles at a certain frame
-static void
-restoreFromCache(GU_Detail* gdp,
-    const std::vector<UT_Vector3>& cp,
-    const std::vector<UT_Vector3>& cv)
+
+int SOP_MPM::resetSimulation(void* data, int, float, const PRM_Template*)
 {
-    gdp->clearAndDestroy();
-    gdp->appendPointBlock((GA_Size)cp.size());
-    GA_RWHandleV3 ph(gdp->getP());
-    GA_RWHandleV3 vh(gdp->addFloatTuple(GA_ATTRIB_POINT, "v", 3));
-    GA_Iterator it(gdp->getPointRange());
-    int i = 0;
-    for (; !it.atEnd(); ++it, ++i) {
-        ph.set(*it, cp[i]); vh.set(*it, cv[i]);
+    SOP_MPM* node = static_cast<SOP_MPM*>(data);
+    if (!node)
+        return 0;
+    OPgetDirector()->getCommandManager()->execute("fcur 1", false);
+
+    return 1;
+}
+
+static void solveCollisionWithContainer(
+    UT_Vector3& pos,
+    UT_Vector3& vel,
+    bool has_container_bbox,
+    const UT_BoundingBox& bbox)
+{
+    // fallback ground
+    if (!has_container_bbox)
+    {
+        if (pos.y() < 0.001f)
+        {
+            pos.y() = 0.001f;
+            vel.y() = (vel.y() < -0.05f) ? -vel.y() * 0.3f : 0.0f;
+        }
+        return;
+    }
+
+    // simple box collision
+    const fpreal eps = 0.001f;
+    const fpreal bounce = 0.3f;
+
+    if (pos.x() < bbox.xmin() + eps) {
+        pos.x() = bbox.xmin() + eps;
+        if (vel.x() < 0.0f) vel.x() = -vel.x() * bounce;
+    }
+    if (pos.x() > bbox.xmax() - eps) {
+        pos.x() = bbox.xmax() - eps;
+        if (vel.x() > 0.0f) vel.x() = -vel.x() * bounce;
+    }
+
+    if (pos.y() < bbox.ymin() + eps) {
+        pos.y() = bbox.ymin() + eps;
+        if (vel.y() < 0.0f) vel.y() = -vel.y() * bounce;
+    }
+    /*if (pos.y() > bbox.ymax() - eps) {
+        pos.y() = bbox.ymax() - eps;
+        if (vel.y() > 0.0f) vel.y() = -vel.y() * bounce;
+    }*/
+
+    if (pos.z() < bbox.zmin() + eps) {
+        pos.z() = bbox.zmin() + eps;
+        if (vel.z() < 0.0f) vel.z() = -vel.z() * bounce;
+    }
+    if (pos.z() > bbox.zmax() - eps) {
+        pos.z() = bbox.zmax() - eps;
+        if (vel.z() > 0.0f) vel.z() = -vel.z() * bounce;
     }
 }
 
@@ -148,95 +195,50 @@ SOP_MPM::cookMySop(OP_Context& context)
     fpreal dt = 1.0 / fps;
 
     int substeps = SYSmax(evalInt("substeps", 0, now), 1);
-    int timescale = SYSmax(evalInt("timescale", 0, now), 1);
+    fpreal timescale = evalFloat("timescale", 0, now);
     dt = dt / (fpreal)substeps * timescale;
 
-    int restart = evalInt("restart_frame", 0, now);
     int emit_on = evalInt("emitter", 0, now);
     int emitrate = SYSmax(evalInt("emitrate", 0, now), 1);
+    fpreal gravity = evalFloat("gravity", 0, now);
+    int final_frame = SYSmax(evalInt("final_frame", 0, now), 1);
 
+    const GU_Detail* prev_state = inputGeo(0, context);   // Prev_Frame
+	const GU_Detail* emit_src = inputGeo(1, context);   //emitter source
+    const GU_Detail* container = inputGeo(2, context);   // bbox / collider
     std::vector<UT_Vector3> source_positions;
+  
+    if (emit_src)
     {
-        const GU_Detail* src = inputGeo(0, context);
-        if (src)
-        {
-            GA_ROHandleV3 src_p(src->getP());
-            GA_Iterator sit(src->getPointRange());
-            for (; !sit.atEnd(); ++sit)
-                source_positions.push_back(src_p.get(*sit));
+        GA_ROHandleV3 src_p(emit_src->getP());
+        GA_Iterator sit(emit_src->getPointRange());
+        for (; !sit.atEnd(); ++sit) {
+            source_positions.push_back(src_p.get(*sit));
         }
     }
 
-    // cache validation
-    if (frame == 1)
+    UT_BoundingBox container_bbox;
+    bool has_container_bbox = false;
+    if (container)
     {
-        pos_cache.clear();
-        vel_cache.clear();
-        last_cached_frame = 0;
-        last_restart_frame = restart;
-        last_substeps = substeps;
-    }
-
-	//  if restart frame is changed and it's smaller than current cached frame, we can keep the cache up to restart frame - 1
-    else if (restart != last_restart_frame)
-    {
-        int keep = restart - 1;
-        if (keep < (int)pos_cache.size())
+        container_bbox.initBounds();
+        GA_ROHandleV3 cph(container->getP());
+        GA_Iterator cit(container->getPointRange());
+        for (; !cit.atEnd(); ++cit)
         {
-            pos_cache.resize(keep);
-            vel_cache.resize(keep);
+            container_bbox.enlargeBounds(cph.get(*cit));
         }
-        last_cached_frame = (int)pos_cache.size();
-        last_restart_frame = restart;
+        has_container_bbox = true;
     }
-
-	// if substeps changed, the cache is no longer valid, need to clear cache and restart
-    else if (substeps != last_substeps)
+    if (!prev_state)
     {
-        pos_cache.clear();
-        vel_cache.clear();
-        last_cached_frame = 0;
-        last_substeps = substeps;
-    }
-	// if current frame is already cached, restore from cache and return
-    if (frame <= last_cached_frame && !pos_cache.empty())
-    {
-        int idx = frame - 1;
-        if (idx < (int)pos_cache.size())
-        {
-            restoreFromCache(gdp, pos_cache[idx], vel_cache[idx]);
-            unlockInputs();
-            return error();
-        }
-    }
-	// if current frame is ahead of last cached frame + 1, it means it attempts to read frame not cached yet, we need to restore to last cached frame and play forward from there
-    if (frame > last_cached_frame + 1)
-    {
-        if (!pos_cache.empty())
-            restoreFromCache(gdp,
-                pos_cache[last_cached_frame - 1],
-                vel_cache[last_cached_frame - 1]);
-        else { duplicateSource(0, context); getVelHandle(gdp); }
-        addWarning(SOP_MESSAGE,
-            "Scrubbed past uncached frames, play forward from frame 1 first.");
         unlockInputs();
+        addError(SOP_MESSAGE, "Missing Prev_Frame input on input 0.");
         return error();
     }
 
-    // first time simulation
-    if (last_cached_frame == 0)
-    {
-        duplicateSource(0, context);
-        getVelHandle(gdp);
-    }
-    else
-    {
-        restoreFromCache(gdp,
-            pos_cache[last_cached_frame - 1],
-            vel_cache[last_cached_frame - 1]);
-    }
-
-    //Compute
+    // Always start from input geometry each cook
+    duplicateSource(0, context);
     GA_RWHandleV3 p_handle(gdp->getP());
     GA_RWHandleV3 v_handle = getVelHandle(gdp);
 
@@ -247,8 +249,23 @@ SOP_MPM::cookMySop(OP_Context& context)
         return error();
     }
 
+
+    UT_AutoInterrupt progress("Running MPM Simulation");
+   
     for (int s = 0; s < substeps; ++s)
     {
+        fpreal sim_progress = ((fpreal)(s + 1)) / (fpreal)substeps;
+
+        sim_progress = SYSclamp(sim_progress, 0.0, 1.0);
+        int percent = (int)(sim_progress * 100.0);
+
+        if (progress.wasInterrupted(percent))
+        {
+            unlockInputs();
+            addWarning(SOP_MESSAGE, "Simulation interrupted by user.");
+            return error();
+        }
+
         GA_Iterator it(gdp->getPointRange());
         for (; !it.atEnd(); ++it)
         {
@@ -257,24 +274,21 @@ SOP_MPM::cookMySop(OP_Context& context)
             UT_Vector3 pos = p_handle.get(ptoff);
             UT_Vector3 vel = v_handle.get(ptoff);
 
-            vel.y() -= dt * 9.8f;
+            vel.y() -= dt * gravity;
             pos += dt * vel;
 
-            if (pos.y() < 0.001f)
-            {
-                pos.y() = 0.001f;
-                vel.y() = (vel.y() < -0.05f) ? -vel.y() * 0.8f : 0.0f;
-            }
+            solveCollisionWithContainer(pos, vel, has_container_bbox, container_bbox);
 
             p_handle.set(ptoff, pos);
             v_handle.set(ptoff, vel);
         }
     }
-
-  //emitter
+        
+    //emitter
     const int emit_every = 5;
     if (emit_on && !source_positions.empty() && (frame % emit_every == 0))
     {
+        SYSsrand48((long)frame);
         int n_src = (int)source_positions.size();
 
         for (int e = 0; e < emitrate; ++e)
@@ -288,33 +302,16 @@ SOP_MPM::cookMySop(OP_Context& context)
                 (fpreal)(SYSdrand48() - 0.5) * 0.5f    // z+-0.25
             );
 
-            gdp->appendPoint();
+            GA_Offset newpt = gdp->appendPointOffset();
             p_handle.bind(gdp->getP());
             v_handle.bind(gdp->findFloatTuple(GA_ATTRIB_POINT, "v", 3));
 
-            GA_Offset newpt = gdp->pointOffset(gdp->getNumPoints() - 1);
             p_handle.set(newpt, birth_pos);
             v_handle.set(newpt, birth_vel);
         }
     }
-
-    // save cache
-    std::vector<UT_Vector3> pf, vf;
-    pf.reserve(gdp->getNumPoints());
-    vf.reserve(gdp->getNumPoints());
-    GA_Iterator it2(gdp->getPointRange());
-    for (; !it2.atEnd(); ++it2)
-    {
-        pf.push_back(p_handle.get(*it2));
-        vf.push_back(v_handle.get(*it2));
-    }
-    pos_cache.push_back(std::move(pf));
-    vel_cache.push_back(std::move(vf));
-    last_cached_frame = frame;
-
-    std::cerr << "frame=" << frame
-        << " pts=" << gdp->getNumPoints()
-        << " cached=" << (int)pos_cache.size() << "\n";
+        std::cerr << "frame=" << frame
+            << " pts=" << gdp->getNumPoints() << "\n";
 
     unlockInputs();
     return error();
