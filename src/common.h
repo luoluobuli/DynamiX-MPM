@@ -11,21 +11,21 @@ struct Params
 	glm::vec3 gridOrigin;
 	float cellSize;
 
-	void init()	{
-		gravity = 9.8f;
-		dt = 0.f;
-		gridRes = glm::ivec3(16, 16, 16);
-		gridOrigin = glm::vec3(0.0f);
-		cellSize = 1.0f;
-	}
+	float mu;
+	float lambda;
+
+	float thetaC = 2.5e-2;
+	float thetaS = 7.5e-3;
 };
 
 struct Particle
 {
-public:
 	glm::vec3 pos;
 	glm::vec3 vel;
 	float mass;
+	float volume;
+	glm::mat3 F;
+	float Jp;
 };
 
 struct GridCell

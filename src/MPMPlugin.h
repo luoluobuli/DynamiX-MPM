@@ -19,6 +19,11 @@ public:
     /// Each parm template refers to a parameter.
     static PRM_Template		 myTemplateList[];
 
+    /// This optional data stores the list of local variables.
+    static CH_LocalVariable	 myVariables[];
+
+    static int resetSimulation(void* data, int index, float time, const PRM_Template*);
+
 protected:
 
 	     SOP_MPM(OP_Network *net, const char *name, OP_Operator *op);
@@ -47,8 +52,8 @@ protected:
 				 {
 				     return evalVariableValue(v, i, thread);
 				 }
-
     void writeBack();
+    void setParameters(float t, const GU_Detail* seed_geo, const GU_Detail* container);
 
 private:
     /// The following list of accessors simplify evaluating the parameters
@@ -72,6 +77,16 @@ private:
 	Solver solver;
     Params params;
     fpreal prevTime = -1.0;
+
+    int lastSeedCount = -1;
+    bool hasLastSeedInfo = false;
+    UT_Vector3 lastSeedMin = UT_Vector3(0, 0, 0);
+    UT_Vector3 lastSeedMax = UT_Vector3(0, 0, 0);
+
+    int lastGridRes = -1;
+    bool hasLastDomainInfo = false;
+    UT_Vector3 lastDomainMin = UT_Vector3(0, 0, 0);
+    UT_Vector3 lastDomainMax = UT_Vector3(0, 0, 0);
 };
 } // End HDK_Sample namespace
 

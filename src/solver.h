@@ -16,13 +16,6 @@ public:
 	void updateGrid();
 	void gridToParticle();
 
-	// Setters
-	void clear(Params params_in) {
-		particles.clear();
-		gridCells.clear();
-		params = params_in;
-	}
-
 	void init(Params params_in) {
 		particles.clear();
 		gridCells.clear();
@@ -31,7 +24,8 @@ public:
 		gridCells.resize(params.gridRes.x * params.gridRes.y * params.gridRes.z);
 	}
 
-	void addParticle(Particle p) { particles.push_back(p); }
+	// Setters
+	void setParticles(std::vector<Particle> p) { particles = p; }
 
 	void setParams(Params params_in) { params = params_in; }
 
@@ -52,4 +46,3 @@ private:
 	std::vector<GridCell> gridCells;
 	Params params;
 };
-
