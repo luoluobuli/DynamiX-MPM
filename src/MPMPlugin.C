@@ -114,12 +114,19 @@ SOP_MPM::disableParms()
 }
 
 void SOP_MPM::writeBack() {
+	GA_RWHandleV3 vHandle(gdp->addFloatTuple(GA_ATTRIB_POINT, "v", 3));
+	if (!vHandle.isValid())
+	{
+		vHandle = GA_RWHandleV3(gdp->addFloatTuple(GA_ATTRIB_POINT, "v", 3));
+	}
+
 	GA_Offset outoff;
 	int i = 0;
 	GA_FOR_ALL_PTOFF(gdp, outoff)
 	{
 		const Particle& p = solver.getParticle(i);
 		gdp->setPos3(outoff, UT_Vector3(p.pos.x, p.pos.y, p.pos.z));
+		vHandle.set(outoff, UT_Vector3(p.vel.x, p.vel.y, p.vel.z));
 		++i;
 	}
 }
