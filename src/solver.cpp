@@ -91,7 +91,12 @@ void Solver::gridToParticle() {
 		float wy[2] = { 1.0f - fy, fy };
 		float wz[2] = { 1.0f - fz, fz };
 
+		float dwx[2] = { -1.0f, 1.0f };
+		float dwy[2] = { -1.0f, 1.0f };
+		float dwz[2] = { -1.0f, 1.0f };
+
 		glm::vec3 newVel(0.0f);
+		glm::mat3 gradVel(0.0f);
 
 		for (int i = 0; i <= 1; ++i) {
 			for (int j = 0; j <= 1; ++j) {
@@ -104,13 +109,27 @@ void Solver::gridToParticle() {
 						cellZ < 0 || cellZ >= params.gridRes.z) {
 						continue;
 					}
+
+					// Weight
 					float w = wx[i] * wy[j] * wz[k];
+
+					// Weight gradient
+					glm::vec3 gradW(
+						dwx[i] * wy[j] * wz[k],
+						wx[i] * dwy[j] * wz[k],
+						wx[i] * wy[j] * dwz[k]
+					);
+					gradW *= invCellSize;
+
 					GridCell& cell = gridCells[cellIndex(cellX, cellY, cellZ)];
+
 					newVel += w * cell.v;
+					gradVel += glm::outerProduct(cell.v, gradW);
 				}
 			}
 		}
 		p.vel = newVel;
 		p.pos += p.vel * params.dt;
+		p.F = (glm::mat3(1.0f) + params.dt * gradVel) * p.F;
 	}
 }

@@ -41,23 +41,26 @@ newSopOperator(OP_OperatorTable *table)
 
 // Declare parameters
 static PRM_Name gravityName("gravity", "Gravity");
-
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//				     ^^^^^^^^    ^^^^^^^^^^^^^^^
-//				     internal    descriptive version
-
+static PRM_Name youngName("young", "Young's Modulus");
+static PRM_Name poissonName("poisson", "Poisson's Ratio");
 
 // Setup the initial/default values for parameters
 static PRM_Default gravityDefault(9.8);
+static PRM_Default youngDefault(1e4);
+static PRM_Default poissonDefault(0.2f);
 
 // Setup the range for parameters
 static PRM_Range gravityRange(PRM_RANGE_UI, 0, PRM_RANGE_UI, 30);
+static PRM_Range youngRange(PRM_RANGE_UI, 1.0f, PRM_RANGE_UI, 1e6f);
+static PRM_Range poissonRange(PRM_RANGE_RESTRICTED, 0.0f, PRM_RANGE_RESTRICTED, 0.49f);
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
 PRM_Template
 SOP_MPM::myTemplateList[] = {
 	PRM_Template(PRM_FLT, 1, &gravityName, &gravityDefault, 0, &gravityRange),
+	PRM_Template(PRM_FLT, 1, &youngName, &youngDefault, 0, &youngRange),
+	PRM_Template(PRM_FLT, 1, &poissonName, &poissonDefault, 0, &poissonRange),
     PRM_Template()
 };
 
@@ -83,8 +86,6 @@ SOP_MPM::myConstructor(OP_Network *net, const char *name, OP_Operator *op)
 SOP_MPM::SOP_MPM(OP_Network *net, const char *name, OP_Operator *op)
 	: SOP_Node(net, name, op)
 {
-	params.init();
-	solver.init(params);
 }
 
 SOP_MPM::~SOP_MPM() {}
@@ -106,11 +107,21 @@ void SOP_MPM::writeBack() {
 	}
 }
 
+void SOP_MPM::setParameters(float t) {
+	params.gravity = evalFloat("gravity", 0, t);
+
+	float E = evalFloat("young", 0, t);
+	float nu = evalFloat("poisson", 0, t);
+	if (nu < 0.0f) nu = 0.0f;
+	if (nu > 0.49f) nu = 0.49f;
+
+	params.mu = E / (2.0f * (1.0f + nu));
+	params.lambda = E * nu / ((1.0f + nu) * (1.0f - 2.0f * nu));
+}
+
 OP_ERROR
 SOP_MPM::cookMySop(OP_Context &context)
 {
-	fpreal now = context.getTime();
-
 	if (lockInputs(context) >= UT_ERROR_ABORT) {
 		return error();
 	}
@@ -144,9 +155,10 @@ SOP_MPM::cookMySop(OP_Context &context)
 
 	if (reset)
 	{
-		params.init();
-		params.gravity = evalFloat("gravity", 0, now);
+		setParameters(t);
 		solver.init(params);
+
+		std::vector<Particle> particles;
 
 		GA_Offset ptoff;
 		GA_FOR_ALL_PTOFF(input, ptoff)
@@ -157,9 +169,12 @@ SOP_MPM::cookMySop(OP_Context &context)
 			p.pos = glm::vec3(P.x(), P.y(), P.z());
 			p.vel = glm::vec3(0.f);
 			p.mass = 1.0f;
+			p.F = glm::mat3(1.0f);
 
-			solver.addParticle(p);
+			particles.push_back(p);
 		}
+
+		solver.setParticles(particles);
 
 		// Write initial positions back to output just to stay consistent
 		writeBack();
@@ -168,16 +183,12 @@ SOP_MPM::cookMySop(OP_Context &context)
 		return error();
 	}
 
-	fpreal dt = t - prevTime;
+	params.dt = t - prevTime;
 	prevTime = t;
 
 	// ------------------- Simulation ----------------------
-	params.init();
-	params.gravity = evalFloat("gravity", 0, now);
-	params.dt = dt;
-
+	setParameters(t);
 	solver.setParams(params);
-
 	solver.step();
 	
 	// ------------------- Write back ----------------------

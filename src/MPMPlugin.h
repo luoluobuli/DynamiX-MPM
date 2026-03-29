@@ -49,6 +49,7 @@ protected:
 				 }
 
     void writeBack();
+    void setParameters(float t);
 
 private:
     /// The following list of accessors simplify evaluating the parameters
