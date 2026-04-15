@@ -49,6 +49,7 @@ protected:
 				 }
 
     void writeBack();
+    void setParameters(float t);
 
 private:
     /// The following list of accessors simplify evaluating the parameters
@@ -72,6 +73,17 @@ private:
 	Solver solver;
     Params params;
     fpreal prevTime = -1.0;
+
+    int lastSeedCount = -1;
+    bool hasLastSeedInfo = false;
+    UT_Vector3 lastSeedMin = UT_Vector3(0, 0, 0);
+    UT_Vector3 lastSeedMax = UT_Vector3(0, 0, 0);
+
+    int lastGridRes = -1;
+    bool hasLastDomainInfo = false;
+    UT_Vector3 lastDomainCenter = UT_Vector3(0, 0, 0);
+    UT_Vector3 lastDomainSize = UT_Vector3(0, 0, 0);
+    CollisionSDF buildCollisionSDF(const GU_Detail* container) const;
 };
 } // End HDK_Sample namespace
 
