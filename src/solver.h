@@ -29,11 +29,9 @@ public:
 
 		gridCells.resize(params.gridRes.x * params.gridRes.y * params.gridRes.z);
 	}
-<<<<<<< Updated upstream
 
 	void addParticle(Particle p) { particles.push_back(p); }
-=======
->>>>>>> Stashed changes
+
 
 	void setParams(Params params_in) { params = params_in; }
 
@@ -43,6 +41,7 @@ public:
 
 	void setCollisionSDF(const CollisionSDF& sdf_in) { collisionSDF = sdf_in; }
 	void clearCollisionSDF() { collisionSDF = CollisionSDF(); }
+	void setParticles(std::vector<Particle> p) { particles = p; }
 
 	// Getters
 	Particle getParticle(int index) { return particles[index]; }
