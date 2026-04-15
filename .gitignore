@@ -69,6 +69,7 @@ compile_commands.json
 
 dso/
 backup/
+geo/
 *.otl
 *.hda
 
