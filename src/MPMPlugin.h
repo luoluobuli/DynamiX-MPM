@@ -84,6 +84,7 @@ private:
     UT_Vector3 lastDomainCenter = UT_Vector3(0, 0, 0);
     UT_Vector3 lastDomainSize = UT_Vector3(0, 0, 0);
     CollisionSDF buildCollisionSDF(const GU_Detail* container) const;
+    static int resetSimulation(void* data, int, float, const PRM_Template*);
 };
 } // End HDK_Sample namespace
 

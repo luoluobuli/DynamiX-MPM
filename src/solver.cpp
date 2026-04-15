@@ -40,6 +40,16 @@ void Solver::particleToGrid() {
 		float wy[2] = { 1.0f - fy, fy };
 		float wz[2] = { 1.0f - fz, fz };
 
+		float dwx[2] = { -1.0f, 1.0f };
+		float dwy[2] = { -1.0f, 1.0f };
+		float dwz[2] = { -1.0f, 1.0f };
+
+		// Compute stress
+		float J = glm::determinant(p.F);
+		J = glm::max(J, 1e-6f);
+		glm::mat3 FinvT = glm::transpose(glm::inverse(p.F));
+		glm::mat3 stress = params.mu * (p.F - FinvT) + params.lambda * log(J) * FinvT;
+
 		for (int i = 0; i <= 1; ++i) {
 			for (int j = 0; j <= 1; ++j) {
 				for (int k = 0; k <= 1; ++k) {
@@ -56,9 +66,21 @@ void Solver::particleToGrid() {
 					// Compute weight
 					float w = wx[i] * wy[j] * wz[k];
 
+					// Compute weight gradient
+					glm::vec3 gradW(
+						dwx[i] * wy[j] * wz[k],
+						wx[i] * dwy[j] * wz[k],
+						wx[i] * wy[j] * dwz[k]
+					);
+					gradW *= invCellSize;
+
 					GridCell& cell = gridCells[cellIndex(cellX, cellY, cellZ)];
 					cell.m += w * p.mass;
 					cell.v += w * p.mass * p.vel;
+
+					// elastic force
+					glm::vec3 force = -p.volume * (stress * gradW);
+					cell.v += params.dt * force;
 				}
 			}
 		}
@@ -106,7 +128,12 @@ void Solver::gridToParticle() {
 		float wy[2] = { 1.0f - fy, fy };
 		float wz[2] = { 1.0f - fz, fz };
 
+		float dwx[2] = { -1.0f, 1.0f };
+		float dwy[2] = { -1.0f, 1.0f };
+		float dwz[2] = { -1.0f, 1.0f };
+
 		glm::vec3 newVel(0.0f);
+		glm::mat3 gradVel(0.0f);
 
 		for (int i = 0; i <= 1; ++i) {
 			for (int j = 0; j <= 1; ++j) {
@@ -119,16 +146,27 @@ void Solver::gridToParticle() {
 						cellZ < 0 || cellZ >= params.gridRes.z) {
 						continue;
 					}
+
+					// Weight
 					float w = wx[i] * wy[j] * wz[k];
+
+					// Weight gradient
+					glm::vec3 gradW(
+						dwx[i] * wy[j] * wz[k],
+						wx[i] * dwy[j] * wz[k],
+						wx[i] * wy[j] * dwz[k]
+					);
+					gradW *= invCellSize;
+
 					GridCell& cell = gridCells[cellIndex(cellX, cellY, cellZ)];
+
 					newVel += w * cell.v;
+					gradVel += glm::outerProduct(cell.v, gradW);
 				}
 			}
 		}
 		p.vel = newVel;
 		p.pos += p.vel * params.dt;
-<<<<<<< Updated upstream
-=======
 
 		//// Elastic deformation
 		//p.F = (glm::mat3(1.0f) + params.dt * gradVel) * p.F;
@@ -413,7 +451,6 @@ void Solver::applyParticleCollision(Particle& p)
 
 			p.vel = vt * frictionScale;
 		}
->>>>>>> Stashed changes
 	}
 }
 

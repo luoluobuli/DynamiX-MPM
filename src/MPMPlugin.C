@@ -12,9 +12,13 @@
 #include <OP/OP_Operator.h>
 #include <OP/OP_OperatorTable.h>
 #include <CH/CH_Manager.h>
+#include <SOP/SOP_Node.h>
+#include <OP/OP_Director.h>
+#include <CMD/CMD_Manager.h>
 #include <GEO/GEO_PrimPoly.h>
 #include <GEO/GEO_PrimVDB.h>
 #include <iostream>
+#include <stdlib.h>
 #include <limits.h>
 #include "MPMPlugin.h"
 
@@ -26,20 +30,19 @@ using namespace HDK_Sample;
 /// to the specified operator table.
 ///
 void
-newSopOperator(OP_OperatorTable *table)
+newSopOperator(OP_OperatorTable* table)
 {
     table->addOperator(
-	    new OP_Operator(
-			"CusMPM",			// Internal name
-		    "MyMPM",			// UI name
-			SOP_MPM::myConstructor,	// How to build the SOP
-			SOP_MPM::myTemplateList,	// My parameters
-			1,				// Min # of sources
-			1				// Max # of sources
-		)
-	);
+        new OP_Operator(
+            "CusMPM",			// Internal name
+            "OurMPM",			// UI name
+            SOP_MPM::myConstructor,	// How to build the SOP
+            SOP_MPM::myTemplateList,	// My parameters
+            1,				// Min # of sources
+            3				// Max # of sources
+        )
+    );
 }
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // declare parameters here
 static PRM_Name substepsName("substeps", "Sub Steps");
@@ -72,7 +75,7 @@ static PRM_Default massDefault(1.f);
 
 static PRM_Default emitterDefault(1);
 static PRM_Default timescaleDefault(0.3);
-static PRM_Default emitrateDefault(3.0); 
+static PRM_Default emitrateDefault(3.0);
 
 static PRM_Default materialDefault(0);
 static PRM_Default youngDefault(10.f);
@@ -88,13 +91,13 @@ static PRM_Default domainSizeDefault[] = {
     PRM_Default(10.0f)
 };
 
-// Setup the initial/default values for parameters
-static PRM_Default gravityDefault(9.8);
-
 // Setup the range for parameters
-static PRM_Range gravityRange(PRM_RANGE_UI, 0, PRM_RANGE_UI, 30);
+static PRM_Range substepsRange(PRM_RANGE_UI, 1, PRM_RANGE_UI, 10);
+static PRM_Range gridResRange(PRM_RANGE_UI, 8, PRM_RANGE_UI, 128);
+static PRM_Range gravityRange(PRM_RANGE_UI, 0.f, PRM_RANGE_UI, 30);
+static PRM_Range massRange(PRM_RANGE_UI, 0.1f, PRM_RANGE_UI, 5.f);
 
-static PRM_Range youngRange(PRM_RANGE_UI, 0.f, PRM_RANGE_UI, 5000.f);
+static PRM_Range youngRange(PRM_RANGE_UI, 0.f, PRM_RANGE_UI, 50.f);
 static PRM_Range poissonRange(PRM_RANGE_RESTRICTED, 0.f, PRM_RANGE_RESTRICTED, 0.49f);
 static PRM_Range domainSizeRange(PRM_RANGE_UI, 0.1f, PRM_RANGE_UI, 100.0f);
 
@@ -124,27 +127,25 @@ SOP_MPM::myTemplateList[] = {
 // Note from Joanne: we are not using it, but I'm keeping this part in case we need it in the future
 // Here's how we define local variables for the SOP.
 enum {
-	VAR_PT,		// Point number of the star
-	VAR_NPT		// Number of points in the star
+    VAR_PT,		// Point number of the star
+    VAR_NPT		// Number of points in the star
 };
 
 bool
-SOP_MPM::evalVariableValue(fpreal &val, int index, int thread)
+SOP_MPM::evalVariableValue(fpreal& val, int index, int thread)
 {
-	return false;
+    return false;
 }
 
-OP_Node *
-SOP_MPM::myConstructor(OP_Network *net, const char *name, OP_Operator *op)
+OP_Node*
+SOP_MPM::myConstructor(OP_Network* net, const char* name, OP_Operator* op)
 {
     return new SOP_MPM(net, name, op);
 }
 
-SOP_MPM::SOP_MPM(OP_Network *net, const char *name, OP_Operator *op)
-	: SOP_Node(net, name, op)
+SOP_MPM::SOP_MPM(OP_Network* net, const char* name, OP_Operator* op)
+    : SOP_Node(net, name, op)
 {
-	params.init();
-	solver.init(params);
 }
 
 SOP_MPM::~SOP_MPM() {}
@@ -339,22 +340,26 @@ void SOP_MPM::setParameters(float t)
 }
 
 OP_ERROR
-SOP_MPM::cookMySop(OP_Context &context)
+SOP_MPM::cookMySop(OP_Context& context)
 {
-	fpreal now = context.getTime();
+    flags().setTimeDep(true);
 
-	if (lockInputs(context) >= UT_ERROR_ABORT) {
-		return error();
-	}
+    const int frame = context.getFrame();
+    const fpreal now = context.getTime();
 
-	// Copy the input geometry (input 0) into the output.
-	duplicatePointSource(0, context);
-	const GU_Detail* input = inputGeo(0, context);
-	if (!input)
-	{
-		unlockInputs();
-		return error();
-	}
+    if (lockInputs(context) >= UT_ERROR_ABORT)
+        return error();
+
+    const GU_Detail* seed_geo = inputGeo(0, context);   // initial particles / prev frame source
+    const GU_Detail* emit_src = inputGeo(1, context);   // emitter source
+    const GU_Detail* container = inputGeo(2, context);   // bbox / collider
+
+    if (!seed_geo)
+    {
+        unlockInputs();
+        addError(SOP_MESSAGE, "Missing input 0.");
+        return error();
+    }
 
     setParameters(now);
 
@@ -397,10 +402,10 @@ SOP_MPM::cookMySop(OP_Context &context)
         params.domainSize.y,
         params.domainSize.z
     );
-   
 
-	// Reset simulation state if time goes backwards or if substeps changes
-	bool reset = false;
+
+    // decide reset
+    bool reset = false;
 
     if (frame == 1 || prevTime < 0.0f || now < prevTime) {
         reset = true;
@@ -416,19 +421,20 @@ SOP_MPM::cookMySop(OP_Context &context)
         reset = true;
     else if (gridRes != lastGridRes)
         reset = true;
-   /* else if (vecChanged(currentDomainCenter, lastDomainCenter) ||
-        vecChanged(currentDomainSize, lastDomainSize))
-        reset = true;*/
+    /* else if (vecChanged(currentDomainCenter, lastDomainCenter) ||
+         vecChanged(currentDomainSize, lastDomainSize))
+         reset = true;*/
 
     if (reset)
     {
         std::cout << "MPM Reset Triggered at Position: " << seedMin.y() << std::endl;
         solver.init(params);
 
-		GA_Offset ptoff;
-		GA_FOR_ALL_PTOFF(input, ptoff)
-		{
-			UT_Vector3 P = input->getPos3(ptoff);
+        std::vector<Particle> particles;
+        GA_Offset ptoff;
+        GA_FOR_ALL_PTOFF(seed_geo, ptoff)
+        {
+            UT_Vector3 P = seed_geo->getPos3(ptoff);
 
             Particle p;
             p.pos = glm::vec3(P.x(), P.y(), P.z());
@@ -497,31 +503,39 @@ SOP_MPM::cookMySop(OP_Context &context)
                 p.volume = params.cellSize * params.cellSize * params.cellSize;
                 p.Jp = 1.0f;
 
-			solver.addParticle(p);
-		}
+                particles.push_back(p);
+            }
 
-		// Write initial positions back to output just to stay consistent
-		writeBack();
-		prevTime = t;
-		unlockInputs();
-		return error();
-	}
+            solver.setParticles(particles);
+        }
+    }
 
     fpreal rawFrameDt = reset ? (1.0 / fps) : (now - prevTime);
     if (rawFrameDt <= 0.0f)
         rawFrameDt = 1.0 / fps;
 
-	// ------------------- Simulation ----------------------
-	params.init();
-	params.gravity = evalFloat("gravity", 0, now);
-	params.dt = dt;
+    fpreal frameDt = rawFrameDt * timescale;
 
-	solver.setParams(params);
+    params.dt = frameDt / (fpreal)substeps;
+    solver.setParams(params);
 
-	solver.step();
-	
-	// ------------------- Write back ----------------------
-	writeBack();
-	unlockInputs();
-	return error();
+    UT_AutoInterrupt progress("Running MPM Simulation");
+    for (int s = 0; s < substeps; ++s)
+    {
+        int percent = (int)(100.0 * (s + 1) / substeps);
+        if (progress.wasInterrupted(percent))
+        {
+            unlockInputs();
+            addWarning(SOP_MESSAGE, "Simulation interrupted by user.");
+            return error();
+        }
+
+        solver.step();
+    }
+
+    writeBack();
+    prevTime = now;
+
+    unlockInputs();
+    return error();
 }
