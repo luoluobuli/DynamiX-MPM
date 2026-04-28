@@ -34,6 +34,7 @@ set(SOURCE_FILES
 )
 
 set(HEADER_FILES
+    src/HDKcommon.h
     src/MPMPlugin.h
     src/matrix.h
     src/vec.h
