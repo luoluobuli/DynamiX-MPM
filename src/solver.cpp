@@ -88,13 +88,6 @@ void Solver::particleToGrid() {
 }
 
 void Solver::updateGrid() {
-	/*for (auto& cell : gridCells) {
-		if (cell.m > 0.0f) {
-			cell.v /= cell.m;
-			cell.v.y -= params.gravity * params.dt;
-		}
-	}*/
-
 	for (int k = 0; k < params.gridRes.z; ++k) {
 		for (int j = 0; j < params.gridRes.y; ++j) {
 			for (int i = 0; i < params.gridRes.x; ++i) {
@@ -167,29 +160,7 @@ void Solver::gridToParticle() {
 		}
 		p.vel = newVel;
 		p.pos += p.vel * params.dt;
-
-		//// Elastic deformation
-		//p.F = (glm::mat3(1.0f) + params.dt * gradVel) * p.F;
-		//float J = glm::determinant(p.F);
-
-		//// Plastic deformation
-		//if (std::isfinite(J) && J > 1e-6f)
-		//{
-		//	float Jmin = 1.0f - params.thetaC;
-		//	float Jmax = 1.0f + params.thetaS;
-
-		//	float clampedJ = glm::clamp(J, Jmin, Jmax);
-		//	float scale = cbrtf(clampedJ / J);
-		//	p.F *= scale;
-
-		//	p.Jp *= J / clampedJ;
-		//}
-		//else
-		//{
-		//	p.F = glm::mat3(1.0f);
-		//	p.Jp = 1.0f;
-		//}
-		// 
+		 
 		// deformation update
 		p.F = (glm::mat3(1.0f) + params.dt * gradVel) * p.F;
 
@@ -217,10 +188,35 @@ void Solver::projectDeformation(Particle& p)
 	case MaterialType::JELLY:
 		projectJelly(p);
 		break;
-
-	default:
-		projectSand(p);
+	case MaterialType::CUSTOM:
+		projectDefault(p);
 		break;
+	default:
+		projectDefault(p);
+		break;
+	}
+}
+
+void Solver::projectDefault(Particle& p) {
+	// Elastic deformation
+	float J = glm::determinant(p.F);
+
+	// Plastic deformation
+	if (std::isfinite(J) && J > 1e-6f)
+	{
+		float Jmin = 1.0f - params.thetaC;
+		float Jmax = 1.0f + params.thetaS;
+
+		float clampedJ = glm::clamp(J, Jmin, Jmax);
+		float scale = cbrtf(clampedJ / J);
+		p.F *= scale;
+
+		p.Jp *= J / clampedJ;
+	}
+	else
+	{
+		p.F = glm::mat3(1.0f);
+		p.Jp = 1.0f;
 	}
 }
 

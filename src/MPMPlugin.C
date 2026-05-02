@@ -1,21 +1,3 @@
-//#include <UT/UT_DSOVersion.h>
-//#include <UT/UT_Math.h>
-//#include <UT/UT_Interrupt.h>
-//#include <GU/GU_Detail.h>
-//#include <GU/GU_PrimPoly.h>
-//#include <CH/CH_LocalVariable.h>
-//#include <PRM/PRM_Include.h>
-//#include <PRM/PRM_SpareData.h>
-//#include <PRM/PRM_ChoiceList.h>
-//#include <OP/OP_Operator.h>
-//#include <OP/OP_OperatorTable.h>
-//#include <CH/CH_Manager.h>
-//#include <SOP/SOP_Node.h>
-//#include <OP/OP_Director.h>
-//#include <CMD/CMD_Manager.h>
-//#include <GEO/GEO_PrimPoly.h>
-//#include <GEO/GEO_PrimVDB.h>
-
 #include "HDKcommon.h"
 #include <iostream>
 #include <stdlib.h>
@@ -47,8 +29,6 @@ newSopOperator(OP_OperatorTable* table)
 // declare parameters here
 static PRM_Name substepsName("substeps", "Sub Steps");
 static PRM_Name resetName("reset_sim", "Reset Simulation");
-static PRM_Name domainCenterName("domaincenter", "Domain Center");
-static PRM_Name domainSizeName("domainsize", "Domain Size");
 static PRM_Name timescaleName("timescale", "Time Scale");
 static PRM_Name emitterName("emitter", "Enable Emitter");
 static PRM_Name emitrateName("emitrate", "Emit Per Burst");
@@ -57,6 +37,7 @@ static PRM_Name gridResName("gridRes", "Grid Resolution");
 static PRM_Name massName("mass", "Mass");
 static PRM_Name materialName("material", "Material");
 static PRM_Name materialMenuItems[] = {
+    PRM_Name("custom", "Custom"),
     PRM_Name("sand",  "Sand"),
     PRM_Name("snow",  "Snow"),
     PRM_Name("jelly", "Jelly"),
@@ -80,16 +61,6 @@ static PRM_Default emitrateDefault(3.0);
 static PRM_Default materialDefault(0);
 static PRM_Default youngDefault(10.f);
 static PRM_Default poissonDefault(0.2f);
-static PRM_Default domainCenterDefault[] = {
-    PRM_Default(0.0f),
-    PRM_Default(0.0f),
-    PRM_Default(0.0f)
-};
-static PRM_Default domainSizeDefault[] = {
-    PRM_Default(10.0f),
-    PRM_Default(10.0f),
-    PRM_Default(10.0f)
-};
 
 // Setup the range for parameters
 static PRM_Range substepsRange(PRM_RANGE_UI, 1, PRM_RANGE_UI, 10);
@@ -99,7 +70,6 @@ static PRM_Range massRange(PRM_RANGE_UI, 0.1f, PRM_RANGE_UI, 5.f);
 
 static PRM_Range youngRange(PRM_RANGE_UI, 0.f, PRM_RANGE_UI, 5000.f);
 static PRM_Range poissonRange(PRM_RANGE_RESTRICTED, 0.f, PRM_RANGE_RESTRICTED, 0.49f);
-static PRM_Range domainSizeRange(PRM_RANGE_UI, 0.1f, PRM_RANGE_UI, 100.0f);
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
@@ -114,7 +84,6 @@ SOP_MPM::myTemplateList[] = {
     PRM_Template(PRM_INT, 1, &substepsName, &substepsDefault, 0, &substepsRange),
     PRM_Template(PRM_INT, 1, &gridResName, &gridResDefault, 0, &gridResRange),
     PRM_Template(PRM_XYZ, 3, &domainCenterName, domainCenterDefault),
-    PRM_Template(PRM_XYZ, 3, &domainSizeName, domainSizeDefault, 0, &domainSizeRange),
     PRM_Template(PRM_FLT, 1, &gravityName, &gravityDefault, 0, &gravityRange),
     PRM_Template(PRM_FLT, 1, &massName, &massDefault, 0, &massRange),
 
@@ -305,38 +274,14 @@ void SOP_MPM::setParameters(float t)
         params.thetaC = 0.15f;
         params.thetaS = 0.15f;
         break;
+    case 3:
+		params.material = MaterialType::CUSTOM;
     default:
-        params.material = MaterialType::SAND;
+        params.material = MaterialType::CUSTOM;
         params.thetaC = 0.08f;
         params.thetaS = 0.002f;
         break;
     }
-
-    UT_Vector3 dc(
-        evalFloat("domaincenter", 0, t),
-        evalFloat("domaincenter", 1, t),
-        evalFloat("domaincenter", 2, t)
-    );
-
-    UT_Vector3 ds(
-        evalFloat("domainsize", 0, t),
-        evalFloat("domainsize", 1, t),
-        evalFloat("domainsize", 2, t)
-    );
-
-    ds.x() = SYSmax(ds.x(), 1e-3f);
-    ds.y() = SYSmax(ds.y(), 1e-3f);
-    ds.z() = SYSmax(ds.z(), 1e-3f);
-
-    params.domainCenter = glm::vec3(dc.x(), dc.y(), dc.z());
-    params.domainSize = glm::vec3(ds.x(), ds.y(), ds.z());
-
-    glm::vec3 halfSize = 0.5f * params.domainSize;
-    params.gridOrigin = params.domainCenter - halfSize;
-
-    float maxDim = glm::max(params.domainSize.x,
-        glm::max(params.domainSize.y, params.domainSize.z));
-    params.cellSize = maxDim / (fpreal)gridRes;
 }
 
 OP_ERROR
@@ -372,7 +317,10 @@ SOP_MPM::cookMySop(OP_Context& context)
         addError(SOP_MESSAGE, "Missing input 2.");
         return error();
     }
-    setParameters(now);
+
+
+    //setParameters(now);
+
     const int gridRes = SYSmax(evalInt("gridRes", 0, now), 1);
     UT_BoundingBox containerBox;
     if (getContainerBBox(container_geo, containerBox))
@@ -383,17 +331,20 @@ SOP_MPM::cookMySop(OP_Context& context)
         UT_Vector3 center = 0.5f * (minv + maxv);
         UT_Vector3 size = maxv - minv;
 
-        params.domainCenter = glm::vec3(center.x(), center.y(), center.z());
-        params.domainSize = glm::vec3(size.x(), size.y(), size.z());
+        if (size.x() != size.y() || size.y() != size.z() || size.x() != size.z())
+        {
+            std::cerr << "Warning: Non-cubic container bounding box detected. This will lead to incorrect cell sizes." << std::endl;
+		}
 
-        glm::vec3 halfSize = 0.5f * params.domainSize;
-        params.gridOrigin = params.domainCenter - halfSize;
-
-        float maxDim = glm::max(params.domainSize.x,
-            glm::max(params.domainSize.y, params.domainSize.z));
-
-        params.cellSize = maxDim / (fpreal)gridRes;
+        glm::vec3 halfSize = 0.5f * glm::vec3(size.x(), size.y(), size.z());
+        params.gridOrigin = glm::vec3(center.x(), center.y(), center.z()) - halfSize;
+        params.cellSize = size.x() / (fpreal)gridRes;
     }
+
+    // ------------------- Playback Control ----------------------
+    // Get dt
+    fpreal t = context.getTime();
+
     const int substeps = SYSmax(evalInt("substeps", 0, now), 1);
     const fpreal timescale = evalFloat("timescale", 0, now);
     const int emit_on = evalInt("emitter", 0, now);
@@ -401,59 +352,17 @@ SOP_MPM::cookMySop(OP_Context& context)
     const fpreal mass = evalFloat("mass", 0, now);
     const fpreal fps = CHgetManager()->getSamplesPerSec();
 
-    auto vecChanged = [](const UT_Vector3& a, const UT_Vector3& b) -> bool
-        {
-            const fpreal eps = 1e-6f;
-            return (SYSabs(a.x() - b.x()) > eps ||
-                SYSabs(a.y() - b.y()) > eps ||
-                SYSabs(a.z() - b.z()) > eps);
-        };
-
-    UT_BoundingBox seedBox;
-    seedBox.initBounds();
-    {
-        GA_ROHandleV3 sph(seed_geo->getP());
-        for (GA_Iterator it(seed_geo->getPointRange()); !it.atEnd(); ++it)
-            seedBox.enlargeBounds(sph.get(*it));
-    }
-
-    UT_Vector3 seedMin = seedBox.minvec();
-    UT_Vector3 seedMax = seedBox.maxvec();
-    int seedCount = (int)seed_geo->getNumPoints();
-    UT_Vector3 currentDomainCenter(
-        params.domainCenter.x,
-        params.domainCenter.y,
-        params.domainCenter.z
-    );
-
-    UT_Vector3 currentDomainSize(
-        params.domainSize.x,
-        params.domainSize.y,
-        params.domainSize.z
-    );
-
-
     // decide reset
     bool reset = false;
 
-    if (frame == 1 || prevTime < 0.0f || now < prevTime) {
+    if (frame == 1 || prevTime < 0.0f || t < prevTime) {
         reset = true;
     }
 
-
-    // seed changed
-    if (hasLastSeedInfo && (seedCount != lastSeedCount || vecChanged(seedMin, lastSeedMin))) {
-        reset = true;
-    }
-    // domain changed
-    if (!hasLastDomainInfo)
-        reset = true;
-    else if (gridRes != lastGridRes)
-        reset = true;
 
     if (reset)
     {
-        std::cout << "MPM Reset Triggered at Position: " << seedMin.y() << std::endl;
+        setParameters(t);
         solver.init(params);
 
         std::vector<Particle> particles;
@@ -474,17 +383,20 @@ SOP_MPM::cookMySop(OP_Context& context)
         }
         solver.setParticles(particles);
 
-
-        lastSeedCount = seedCount;
-        lastSeedMin = seedMin;
-        lastSeedMax = seedMax;
-        hasLastSeedInfo = true;
-
-        lastGridRes = gridRes;
-        lastDomainCenter = currentDomainCenter;
-        lastDomainSize = currentDomainSize;
-        hasLastDomainInfo = true;
+        // Write initial positions back to output just to stay consistent
+        writeBack();
+        prevTime = t;
+        unlockInputs();
+        return error();
     }
+
+    fpreal rawFrameDt = reset ? (1.0 / fps) : (t - prevTime);
+    if (rawFrameDt <= 0.0f)
+        rawFrameDt = 1.0 / fps;
+
+    fpreal frameDt = rawFrameDt * timescale;
+
+    prevTime = t;
 
     CollisionSDF sdf = buildCollisionSDF(collider_geo);
     if (sdf.valid()) {
@@ -544,14 +456,10 @@ SOP_MPM::cookMySop(OP_Context& context)
         }
     }
 
-    fpreal rawFrameDt = reset ? (1.0 / fps) : (now - prevTime);
-    if (rawFrameDt <= 0.0f)
-        rawFrameDt = 1.0 / fps;
 
-    fpreal frameDt = rawFrameDt * timescale;
-
-    params.dt = frameDt / (fpreal)substeps;
-    solver.setParams(params);
+    setParameters(t);
+    float subDt = frameDt / (float)substeps;
+    
 
     UT_AutoInterrupt progress("Running MPM Simulation");
     for (int s = 0; s < substeps; ++s)
@@ -563,7 +471,8 @@ SOP_MPM::cookMySop(OP_Context& context)
             addWarning(SOP_MESSAGE, "Simulation interrupted by user.");
             return error();
         }
-
+        params.dt = subDt;
+        solver.setParams(params);
         solver.step();
     }
 

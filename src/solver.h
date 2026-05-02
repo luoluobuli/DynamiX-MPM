@@ -58,6 +58,7 @@ private:
 	CollisionSDF collisionSDF;
 
 	void projectDeformation(Particle& p);
+	void projectDefault(Particle& p);
 	void projectSand(Particle& p);
 	void projectSnow(Particle& p);
 	void projectJelly(Particle& p);
