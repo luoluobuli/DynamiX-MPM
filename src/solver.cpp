@@ -51,6 +51,20 @@ void Solver::particleToGrid() {
 		float J = glm::determinant(p.F);
 		if (!std::isfinite(J) || J <= 1e-6f) continue;
 
+		float mu = params.mu;
+		float lambda = params.lambda;
+
+		if (params.material == MaterialType::SNOW)
+		{
+			float h = expf(params.hardening * (1.0f - p.Jp));
+
+			// Optional safety clamp
+			h = glm::clamp(h, 0.2f, 10.0f);
+
+			mu *= h;
+			lambda *= h;
+		}
+
 		glm::mat3 FinvT = glm::transpose(glm::inverse(p.F));
 		glm::mat3 stress = params.mu * (p.F - FinvT) + params.lambda * log(J) * FinvT;
 
