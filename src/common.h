@@ -40,6 +40,7 @@ struct Params
 
     float mu;
     float lambda;
+    float hardening;
 
     float thetaC = 2.5e-2f;
     float thetaS = 7.5e-3f;

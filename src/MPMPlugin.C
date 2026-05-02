@@ -35,6 +35,7 @@ static PRM_Name emitrateName("emitrate", "Emit Per Burst");
 static PRM_Name gravityName("gravity", "Gravity");
 static PRM_Name gridResName("gridRes", "Grid Resolution");
 static PRM_Name massName("mass", "Mass");
+static PRM_Name initVelocityName("initVelocity", "Initial Velocity");
 static PRM_Name materialName("material", "Material");
 static PRM_Name materialMenuItems[] = {
     PRM_Name("custom", "Custom"),
@@ -53,6 +54,11 @@ static PRM_Default substepsDefault(4);
 static PRM_Default gridResDefault(16);
 static PRM_Default gravityDefault(9.8f);
 static PRM_Default massDefault(1.f);
+static PRM_Default initVelocityDefault[] = {
+    PRM_Default(0.0f),
+    PRM_Default(0.0f),
+    PRM_Default(0.0f)
+};
 
 static PRM_Default emitterDefault(1);
 static PRM_Default timescaleDefault(0.3);
@@ -80,11 +86,11 @@ SOP_MPM::myTemplateList[] = {
     PRM_Template(PRM_TOGGLE, 1, &emitterName, &emitterDefault),
     PRM_Template(PRM_INT, 1, &emitrateName, &emitrateDefault),
 
-
     PRM_Template(PRM_INT, 1, &substepsName, &substepsDefault, 0, &substepsRange),
     PRM_Template(PRM_INT, 1, &gridResName, &gridResDefault, 0, &gridResRange),
     PRM_Template(PRM_FLT, 1, &gravityName, &gravityDefault, 0, &gravityRange),
     PRM_Template(PRM_FLT, 1, &massName, &massDefault, 0, &massRange),
+    PRM_Template(PRM_XYZ, 3, &initVelocityName, initVelocityDefault),
 
     PRM_Template(PRM_ORD, 1, &materialName, &materialDefault, &materialMenu),
     PRM_Template(PRM_FLT, 1, &youngName, &youngDefault, 0, &youngRange),
@@ -254,6 +260,7 @@ void SOP_MPM::setParameters(float t)
 
     params.mu = E / (2.0f * (1.0f + nu));
     params.lambda = E * nu / ((1.0f + nu) * (1.0f - 2.0f * nu));
+    params.hardening = 10.f;
 
     const int mat = evalInt("material", 0, t);
     switch (mat)
@@ -275,10 +282,9 @@ void SOP_MPM::setParameters(float t)
         break;
     case 3:
 		params.material = MaterialType::CUSTOM;
+        break;
     default:
         params.material = MaterialType::CUSTOM;
-        params.thetaC = 0.08f;
-        params.thetaS = 0.002f;
         break;
     }
 }
@@ -372,8 +378,12 @@ SOP_MPM::cookMySop(OP_Context& context)
 
             Particle p;
             p.pos = glm::vec3(P.x(), P.y(), P.z());
-            p.vel = glm::vec3(0.0f);
-            p.mass = evalFloat("mass", 0, now);
+            p.vel = glm::vec3(
+                evalFloat("initVelocity", 0, t),
+                evalFloat("initVelocity", 1, t),
+                evalFloat("initVelocity", 2, t)
+			);
+            p.mass = evalFloat("mass", 0, t);
             p.F = glm::mat3(1.0f);
 			p.C = glm::mat3(0.0f);
             p.volume = params.cellSize * params.cellSize * params.cellSize;
