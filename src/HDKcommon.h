@@ -1,0 +1,22 @@
+#pragma once
+#include <SYS/SYS_Types.h>
+#include <CE/CE_API.h>
+#include <CE/cl.hpp>
+
+#include <UT/UT_DSOVersion.h>
+#include <UT/UT_Math.h>
+#include <UT/UT_Interrupt.h>
+#include <GU/GU_Detail.h>
+#include <GU/GU_PrimPoly.h>
+#include <CH/CH_LocalVariable.h>
+#include <PRM/PRM_Include.h>
+#include <PRM/PRM_SpareData.h>
+#include <PRM/PRM_ChoiceList.h>
+#include <OP/OP_Operator.h>
+#include <OP/OP_OperatorTable.h>
+#include <CH/CH_Manager.h>
+#include <SOP/SOP_Node.h>
+#include <OP/OP_Director.h>
+#include <CMD/CMD_Manager.h>
+#include <GEO/GEO_PrimPoly.h>
+#include <GEO/GEO_PrimVDB.h>
