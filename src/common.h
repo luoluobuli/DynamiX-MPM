@@ -7,7 +7,8 @@ enum class MaterialType
 {
     SAND = 0,
     SNOW = 1,
-    JELLY = 2
+    JELLY = 2,
+    CUSTOM = 3
 };
 
 struct CollisionSDF
