@@ -69,4 +69,3 @@ private:
 	void applyParticleCollision(Particle& p);
 	void applyGridCollision(int i, int j, int k, GridCell& cell);
 };
-

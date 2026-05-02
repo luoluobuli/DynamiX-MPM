@@ -454,4 +454,3 @@ void Solver::applyParticleCollision(Particle& p)
 	}
 }
 
-
