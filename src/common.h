@@ -63,4 +63,5 @@ struct GridCell
 {
     float m = 0.0f;
     glm::vec3 v = glm::vec3(0.0f);
+    glm::vec3 f = glm::vec3(0.0f);
 };
