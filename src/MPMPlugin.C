@@ -97,7 +97,7 @@ static PRM_Range gridResRange(PRM_RANGE_UI, 8, PRM_RANGE_UI, 128);
 static PRM_Range gravityRange(PRM_RANGE_UI, 0.f, PRM_RANGE_UI, 30);
 static PRM_Range massRange(PRM_RANGE_UI, 0.1f, PRM_RANGE_UI, 5.f);
 
-static PRM_Range youngRange(PRM_RANGE_UI, 0.f, PRM_RANGE_UI, 50.f);
+static PRM_Range youngRange(PRM_RANGE_UI, 0.f, PRM_RANGE_UI, 5000.f);
 static PRM_Range poissonRange(PRM_RANGE_RESTRICTED, 0.f, PRM_RANGE_RESTRICTED, 0.49f);
 static PRM_Range domainSizeRange(PRM_RANGE_UI, 0.1f, PRM_RANGE_UI, 100.0f);
 
@@ -351,8 +351,8 @@ SOP_MPM::cookMySop(OP_Context& context)
         return error();
 
     const GU_Detail* seed_geo = inputGeo(0, context);   // initial particles / prev frame source
-    const GU_Detail* emit_src = inputGeo(1, context);   // emitter source
-    const GU_Detail* container = inputGeo(2, context);   // bbox / collider
+    const GU_Detail* collider_geo = inputGeo(1, context);   // collider
+    const GU_Detail* container_geo= inputGeo(2, context);   // container
 
     if (!seed_geo)
     {
@@ -360,15 +360,45 @@ SOP_MPM::cookMySop(OP_Context& context)
         addError(SOP_MESSAGE, "Missing input 0.");
         return error();
     }
-
+    if (!collider_geo)
+    {
+        unlockInputs();
+        addError(SOP_MESSAGE, "Missing input 1.");
+        return error();
+    }
+    if (!container_geo)
+    {
+        unlockInputs();
+        addError(SOP_MESSAGE, "Missing input 2.");
+        return error();
+    }
     setParameters(now);
+    const int gridRes = SYSmax(evalInt("gridRes", 0, now), 1);
+    UT_BoundingBox containerBox;
+    if (getContainerBBox(container_geo, containerBox))
+    {
+        UT_Vector3 minv = containerBox.minvec();
+        UT_Vector3 maxv = containerBox.maxvec();
 
+        UT_Vector3 center = 0.5f * (minv + maxv);
+        UT_Vector3 size = maxv - minv;
+
+        params.domainCenter = glm::vec3(center.x(), center.y(), center.z());
+        params.domainSize = glm::vec3(size.x(), size.y(), size.z());
+
+        glm::vec3 halfSize = 0.5f * params.domainSize;
+        params.gridOrigin = params.domainCenter - halfSize;
+
+        float maxDim = glm::max(params.domainSize.x,
+            glm::max(params.domainSize.y, params.domainSize.z));
+
+        params.cellSize = maxDim / (fpreal)gridRes;
+    }
     const int substeps = SYSmax(evalInt("substeps", 0, now), 1);
     const fpreal timescale = evalFloat("timescale", 0, now);
     const int emit_on = evalInt("emitter", 0, now);
     const int emitrate = SYSmax(evalInt("emitrate", 0, now), 1);
     const fpreal mass = evalFloat("mass", 0, now);
-    const int gridRes = SYSmax(evalInt("gridRes", 0, now), 1);
     const fpreal fps = CHgetManager()->getSamplesPerSec();
 
     auto vecChanged = [](const UT_Vector3& a, const UT_Vector3& b) -> bool
@@ -379,7 +409,6 @@ SOP_MPM::cookMySop(OP_Context& context)
                 SYSabs(a.z() - b.z()) > eps);
         };
 
-    // ---- current seed bbox ----
     UT_BoundingBox seedBox;
     seedBox.initBounds();
     {
@@ -421,9 +450,6 @@ SOP_MPM::cookMySop(OP_Context& context)
         reset = true;
     else if (gridRes != lastGridRes)
         reset = true;
-    /* else if (vecChanged(currentDomainCenter, lastDomainCenter) ||
-         vecChanged(currentDomainSize, lastDomainSize))
-         reset = true;*/
 
     if (reset)
     {
@@ -460,7 +486,7 @@ SOP_MPM::cookMySop(OP_Context& context)
         hasLastDomainInfo = true;
     }
 
-    CollisionSDF sdf = buildCollisionSDF(container);
+    CollisionSDF sdf = buildCollisionSDF(collider_geo);
     if (sdf.valid()) {
         solver.setCollisionSDF(sdf);
     }
@@ -468,28 +494,36 @@ SOP_MPM::cookMySop(OP_Context& context)
         solver.clearCollisionSDF();
     }
     // emitter: add to solver, not gdp
-    if (emit_on && emit_src && frame % 5 == 0)
+    if (emit_on && frame % 5 == 0)
     {
-        std::vector<Particle> particles;
-        particles.reserve(solver.getParticleCount() + emitrate);
-
-        for (int i = 0; i < solver.getParticleCount(); ++i)
-            particles.push_back(solver.getParticle(i));
-
-        std::vector<UT_Vector3> source_positions;
-        GA_ROHandleV3 src_p(emit_src->getP());
-        for (GA_Iterator it(emit_src->getPointRange()); !it.atEnd(); ++it)
-            source_positions.push_back(src_p.get(*it));
-
-        if (!source_positions.empty())
+        UT_BoundingBox emitBox;
+        if (getContainerBBox(container_geo, emitBox))
         {
+            std::vector<Particle> particles;
+            particles.reserve(solver.getParticleCount() + emitrate);
+
+            for (int i = 0; i < solver.getParticleCount(); ++i)
+                particles.push_back(solver.getParticle(i));
+
+            UT_Vector3 minv = emitBox.minvec();
+            UT_Vector3 maxv = emitBox.maxvec();
+
             SYSsrand48((long)frame);
-            int n_src = (int)source_positions.size();
+
+
 
             for (int e = 0; e < emitrate; ++e)
             {
-                int idx = (int)(SYSdrand48() * n_src) % n_src;
-                UT_Vector3 birth_pos = source_positions[idx];
+                float rx = (float)SYSdrand48();
+                float ry = (float)SYSdrand48();
+                float rz = (float)SYSdrand48();
+
+                UT_Vector3 birth_pos(
+                    minv.x() + rx * (maxv.x() - minv.x()),
+                    minv.y() + ry * (maxv.y() - minv.y()),
+                    minv.z() + rz * (maxv.z() - minv.z())
+                );
+
 
                 Particle p;
                 p.pos = glm::vec3(birth_pos.x(), birth_pos.y(), birth_pos.z());
