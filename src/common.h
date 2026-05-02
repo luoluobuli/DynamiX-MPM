@@ -57,6 +57,7 @@ struct Particle
     float mass;
     float volume;
     glm::mat3 F;
+    glm::mat3 C;
     float Jp;
 };
 
