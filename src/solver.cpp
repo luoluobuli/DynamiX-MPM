@@ -1,6 +1,13 @@
 #include "Solver.h"
 #include <limits>
 
+static inline void quadraticWeights(float f, float w[3])
+{
+	w[0] = 0.5f * (1.5f - f) * (1.5f - f);
+	w[1] = 0.75f - (f - 1.0f) * (f - 1.0f);
+	w[2] = 0.5f * (f - 0.5f) * (f - 0.5f);
+}
+
 int Solver::cellIndex(int i, int j, int k) {
 	return i + j * params.gridRes.x + k * params.gridRes.x * params.gridRes.y;
 }
@@ -27,35 +34,36 @@ void Solver::particleToGrid() {
 		glm::vec3 gridCoord = (p.pos - params.gridOrigin) * invCellSize;
 
 		// Find the base cell& neighboring cells
-		// Linear interpolation now; move to quadradic later
-		int x = floor(gridCoord.x);
-		int y = floor(gridCoord.y);
-		int z = floor(gridCoord.z);
+		glm::ivec3 base = glm::ivec3(
+			floor(gridCoord.x - 0.5f),
+			floor(gridCoord.y - 0.5f),
+			floor(gridCoord.z - 0.5f)
+		);
 
-		float fx = gridCoord.x - x;
-		float fy = gridCoord.y - y;
-		float fz = gridCoord.z - z;
+		glm::vec3 fx = gridCoord - glm::vec3(base);
 
-		float wx[2] = { 1.0f - fx, fx };
-		float wy[2] = { 1.0f - fy, fy };
-		float wz[2] = { 1.0f - fz, fz };
-
-		float dwx[2] = { -1.0f, 1.0f };
-		float dwy[2] = { -1.0f, 1.0f };
-		float dwz[2] = { -1.0f, 1.0f };
+		float wx[3], wy[3], wz[3];
+		quadraticWeights(fx.x, wx);
+		quadraticWeights(fx.y, wy);
+		quadraticWeights(fx.z, wz);
 
 		// Compute stress
 		float J = glm::determinant(p.F);
-		J = glm::max(J, 1e-6f);
+		if (!std::isfinite(J) || J <= 1e-6f) continue;
+
 		glm::mat3 FinvT = glm::transpose(glm::inverse(p.F));
 		glm::mat3 stress = params.mu * (p.F - FinvT) + params.lambda * log(J) * FinvT;
 
-		for (int i = 0; i <= 1; ++i) {
-			for (int j = 0; j <= 1; ++j) {
-				for (int k = 0; k <= 1; ++k) {
-					int cellX = x + i;
-					int cellY = y + j;
-					int cellZ = z + k;
+		// MLS-MPM
+		glm::mat3 stressTerm = (-4.f * invCellSize * invCellSize * params.dt * p.volume) * stress * glm::transpose(p.F);
+		glm::mat3 affine = stressTerm + p.mass * p.C;
+
+		for (int i = 0; i < 3; ++i) {
+			for (int j = 0; j < 3; ++j) {
+				for (int k = 0; k < 3; ++k) {
+					int cellX = base.x + i;
+					int cellY = base.y + j;
+					int cellZ = base.z + k;
 					// Check bounds
 					if (cellX < 0 || cellX >= params.gridRes.x ||
 						cellY < 0 || cellY >= params.gridRes.y ||
@@ -65,22 +73,11 @@ void Solver::particleToGrid() {
 
 					// Compute weight
 					float w = wx[i] * wy[j] * wz[k];
-
-					// Compute weight gradient
-					glm::vec3 gradW(
-						dwx[i] * wy[j] * wz[k],
-						wx[i] * dwy[j] * wz[k],
-						wx[i] * wy[j] * dwz[k]
-					);
-					gradW *= invCellSize;
+					glm::vec3 dpos = (glm::vec3(i, j, k) - fx) * params.cellSize;
 
 					GridCell& cell = gridCells[cellIndex(cellX, cellY, cellZ)];
 					cell.m += w * p.mass;
-					cell.v += w * p.mass * p.vel;
-
-					// elastic force
-					glm::vec3 force = -p.volume * (stress * gradW);
-					cell.v += params.dt * force;
+					cell.v += w * (p.mass * p.vel + affine * dpos);
 				}
 			}
 		}
@@ -92,11 +89,14 @@ void Solver::updateGrid() {
 		for (int j = 0; j < params.gridRes.y; ++j) {
 			for (int i = 0; i < params.gridRes.x; ++i) {
 				GridCell& cell = gridCells[cellIndex(i, j, k)];
-				if (cell.m > 0.0f) {
+				if (cell.m > 0.01f) {
 					cell.v /= cell.m;
 					cell.v.y -= params.gravity * params.dt;
 
 					applyGridCollision(i, j, k, cell);
+				}
+				else {
+					cell.v = glm::vec3(0.0f);
 				}
 			}
 		}
@@ -109,31 +109,28 @@ void Solver::gridToParticle() {
 	for (auto& p : particles) {
 		glm::vec3 gridCoord = (p.pos - params.gridOrigin) * invCellSize;
 
-		int x = floor(gridCoord.x);
-		int y = floor(gridCoord.y);
-		int z = floor(gridCoord.z);
+		glm::ivec3 base = glm::ivec3(
+			floor(gridCoord.x - 0.5f),
+			floor(gridCoord.y - 0.5f),
+			floor(gridCoord.z - 0.5f)
+		);
 
-		float fx = gridCoord.x - x;
-		float fy = gridCoord.y - y;
-		float fz = gridCoord.z - z;
+		glm::vec3 fx = gridCoord - glm::vec3(base);
 
-		float wx[2] = { 1.0f - fx, fx };
-		float wy[2] = { 1.0f - fy, fy };
-		float wz[2] = { 1.0f - fz, fz };
-
-		float dwx[2] = { -1.0f, 1.0f };
-		float dwy[2] = { -1.0f, 1.0f };
-		float dwz[2] = { -1.0f, 1.0f };
+		float wx[3], wy[3], wz[3];
+		quadraticWeights(fx.x, wx);
+		quadraticWeights(fx.y, wy);
+		quadraticWeights(fx.z, wz);
 
 		glm::vec3 newVel(0.0f);
-		glm::mat3 gradVel(0.0f);
+		glm::mat3 newC(0.0f);
 
-		for (int i = 0; i <= 1; ++i) {
-			for (int j = 0; j <= 1; ++j) {
-				for (int k = 0; k <= 1; ++k) {
-					int cellX = x + i;
-					int cellY = y + j;
-					int cellZ = z + k;
+		for (int i = 0; i < 3; ++i) {
+			for (int j = 0; j < 3; ++j) {
+				for (int k = 0; k < 3; ++k) {
+					int cellX = base.x + i;
+					int cellY = base.y + j;
+					int cellZ = base.z + k;
 					if (cellX < 0 || cellX >= params.gridRes.x ||
 						cellY < 0 || cellY >= params.gridRes.y ||
 						cellZ < 0 || cellZ >= params.gridRes.z) {
@@ -142,27 +139,21 @@ void Solver::gridToParticle() {
 
 					// Weight
 					float w = wx[i] * wy[j] * wz[k];
-
-					// Weight gradient
-					glm::vec3 gradW(
-						dwx[i] * wy[j] * wz[k],
-						wx[i] * dwy[j] * wz[k],
-						wx[i] * wy[j] * dwz[k]
-					);
-					gradW *= invCellSize;
+					glm::vec3 dpos = glm::vec3(i, j, k) - fx;
 
 					GridCell& cell = gridCells[cellIndex(cellX, cellY, cellZ)];
-
+					
 					newVel += w * cell.v;
-					gradVel += glm::outerProduct(cell.v, gradW);
+					newC += 4.0f * invCellSize * w * glm::outerProduct(cell.v, dpos);
 				}
 			}
 		}
 		p.vel = newVel;
+		p.C = newC;
 		p.pos += p.vel * params.dt;
 		 
 		// deformation update
-		p.F = (glm::mat3(1.0f) + params.dt * gradVel) * p.F;
+		p.F = (glm::mat3(1.0f) + params.dt * p.C) * p.F;
 
 		// material specific projection
 		projectDeformation(p);

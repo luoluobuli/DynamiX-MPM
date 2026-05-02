@@ -83,7 +83,6 @@ SOP_MPM::myTemplateList[] = {
 
     PRM_Template(PRM_INT, 1, &substepsName, &substepsDefault, 0, &substepsRange),
     PRM_Template(PRM_INT, 1, &gridResName, &gridResDefault, 0, &gridResRange),
-    PRM_Template(PRM_XYZ, 3, &domainCenterName, domainCenterDefault),
     PRM_Template(PRM_FLT, 1, &gravityName, &gravityDefault, 0, &gravityRange),
     PRM_Template(PRM_FLT, 1, &massName, &massDefault, 0, &massRange),
 
@@ -376,6 +375,7 @@ SOP_MPM::cookMySop(OP_Context& context)
             p.vel = glm::vec3(0.0f);
             p.mass = evalFloat("mass", 0, now);
             p.F = glm::mat3(1.0f);
+			p.C = glm::mat3(0.0f);
             p.volume = params.cellSize * params.cellSize * params.cellSize;
             p.Jp = 1.0f;
 
