@@ -435,10 +435,11 @@ void Solver::applyGridCollision(int i, int j, int k, GridCell& cell)
 		glm::vec3 v_tangent = v - v_normal;
 
 		float bounce = 0.0f;
+		float explosion_factor = 1.0f;
 		switch (params.material) {
-		case MaterialType::JELLY: bounce = 0.5f; break;
-		case MaterialType::SNOW:  bounce = 0.02f; break;
-		case MaterialType::SAND:  bounce = 0.01f; break;
+		case MaterialType::JELLY: bounce = 0.5f; explosion_factor = 2.f; break;
+		case MaterialType::SNOW:  bounce = 0.02f; explosion_factor = 3.f; break;
+		case MaterialType::SAND:  bounce = 0.01f; explosion_factor = 1.f; break;
 		}
 
 		v_normal *= -bounce;
@@ -452,7 +453,7 @@ void Solver::applyGridCollision(int i, int j, int k, GridCell& cell)
 		}
 
 		cell.v = v_normal + v_tangent;
-		cell.v *= n * 3.0f; // explosion factor
+		cell.v *= n * explosion_factor; // explosion factor
 	}
 }
 
