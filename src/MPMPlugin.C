@@ -219,6 +219,17 @@ SOP_MPM::buildCollisionSDF(const GU_Detail* container) const
     const GEO_PrimVDB* vdb = findFirstVDB(container);
     if (!vdb)
         return sdf;
+    
+    UT_BoundingBox bbox;
+    vdb->getBBox(&bbox);
+
+    UT_Vector3 center = bbox.center();
+
+    sdf.translation = glm::vec3(
+        center.x(),
+        center.y(),
+        center.z()
+    );
 
     sdf.res = params.gridRes + glm::ivec3(1);
     sdf.origin = params.gridOrigin;

@@ -17,6 +17,7 @@ struct CollisionSDF
     glm::vec3 origin = glm::vec3(0.0f);
     float dx = 1.0f;
     std::vector<float> phi;
+    glm::vec3 translation = glm::vec3(0.0f);
 
     bool valid() const
     {

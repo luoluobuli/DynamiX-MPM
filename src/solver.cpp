@@ -13,6 +13,9 @@ int Solver::cellIndex(int i, int j, int k) {
 }
 
 void Solver::step() {
+	colliderVelocity = (colliderTranslation - prevColliderTranslation) / params.dt;
+	prevColliderTranslation = colliderTranslation;
+
 	clearGrid();
 	particleToGrid();
 	updateGrid();
@@ -395,12 +398,14 @@ void Solver::applyGridCollision(int i, int j, int k, GridCell& cell)
 	if (phi > 0.001f) return;
 
 	glm::vec3 n = sampleSDFNormal(x);
+
+	glm::vec3 v = cell.v - colliderVelocity;
 	float vn = glm::dot(cell.v, n);
 
 	if (vn < 0.0f)
 	{
 		glm::vec3 v_normal = vn * n;
-		glm::vec3 v_tangent = cell.v - v_normal;
+		glm::vec3 v_tangent = v - v_normal;
 
 		float bounce = 0.0f;
 		switch (params.material) {
@@ -420,6 +425,7 @@ void Solver::applyGridCollision(int i, int j, int k, GridCell& cell)
 		}
 
 		cell.v = v_normal + v_tangent;
+		cell.v *= n * 3.0f;
 	}
 }
 
@@ -438,24 +444,24 @@ void Solver::applyParticleCollision(Particle& p)
 		p.pos -= phi * n;
 		p.pos += 1e-4f * n;
 
-		// projected velocity length on normal direction
-		float vn = glm::dot(p.vel, n);
-		// collide into collider
-		if (vn < 0.0f)
-		{
-			//tangent velocity
-			glm::vec3 vt = p.vel - vn * n;
-			float vtLen = glm::length(vt);
+		//// projected velocity length on normal direction
+		//float vn = glm::dot(p.vel, n);
+		//// collide into collider
+		//if (vn < 0.0f)
+		//{
+		//	//tangent velocity
+		//	glm::vec3 vt = p.vel - vn * n;
+		//	float vtLen = glm::length(vt);
 
-			float frictionScale = 1.0f;
-			if (vtLen > 1e-8f)
-			{
-				float maxReduce = params.colliderFriction * (-vn);
-				frictionScale = glm::max(0.0f, 1.0f - maxReduce / vtLen);
-			}
+		//	float frictionScale = 1.0f;
+		//	if (vtLen > 1e-8f)
+		//	{
+		//		float maxReduce = params.colliderFriction * (-vn);
+		//		frictionScale = glm::max(0.0f, 1.0f - maxReduce / vtLen);
+		//	}
 
-			p.vel = vt * frictionScale;
-		}
+		//	p.vel = vt * frictionScale;
+		//}
 	}
 }
 

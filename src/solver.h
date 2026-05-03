@@ -57,6 +57,10 @@ private:
 	Params params;
 	CollisionSDF collisionSDF;
 
+	glm::vec3 colliderTranslation;
+	glm::vec3 prevColliderTranslation;
+	glm::vec3 colliderVelocity;
+
 	void projectDeformation(Particle& p);
 	void projectDefault(Particle& p);
 	void projectSand(Particle& p);
