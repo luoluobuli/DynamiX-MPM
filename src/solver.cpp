@@ -105,7 +105,7 @@ void Solver::updateGrid() {
 				GridCell& cell = gridCells[cellIndex(i, j, k)];
 				if (cell.m > 0.01f) {
 					cell.v /= cell.m;
-					cell.v.y -= params.gravity * params.dt;
+					//cell.v.y -= params.gravity * params.dt;
 
 					applyGridCollision(i, j, k, cell);
 				}
@@ -163,6 +163,12 @@ void Solver::gridToParticle() {
 			}
 		}
 		p.vel = newVel;
+		if (p.is_emitter_particle) {
+			p.vel.y -= 9.8f * params.dt;
+		}
+		else {
+			p.vel.y -= params.gravity* params.dt;
+		}
 		p.C = newC;
 		p.pos += p.vel * params.dt;
 		 
@@ -401,7 +407,7 @@ void Solver::applyGridCollision(int i, int j, int k, GridCell& cell)
 		float bounce = 0.0f;
 		switch (params.material) {
 		case MaterialType::JELLY: bounce = 0.5f; break;
-		case MaterialType::SNOW:  bounce = 0.1f; break;
+		case MaterialType::SNOW:  bounce = 0.02f; break;
 		case MaterialType::SAND:  bounce = 0.01f; break;
 		}
 

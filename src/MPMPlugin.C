@@ -415,56 +415,7 @@ SOP_MPM::cookMySop(OP_Context& context)
     else {
         solver.clearCollisionSDF();
     }
-    // emitter: add to solver, not gdp
-    if (emit_on && frame % 5 == 0)
-    {
-        UT_BoundingBox emitBox;
-        if (getContainerBBox(container_geo, emitBox))
-        {
-            std::vector<Particle> particles;
-            particles.reserve(solver.getParticleCount() + emitrate);
-
-            for (int i = 0; i < solver.getParticleCount(); ++i)
-                particles.push_back(solver.getParticle(i));
-
-            UT_Vector3 minv = emitBox.minvec();
-            UT_Vector3 maxv = emitBox.maxvec();
-
-            SYSsrand48((long)frame);
-
-
-
-            for (int e = 0; e < emitrate; ++e)
-            {
-                float rx = (float)SYSdrand48();
-                float ry = (float)SYSdrand48();
-                float rz = (float)SYSdrand48();
-
-                UT_Vector3 birth_pos(
-                    minv.x() + rx * (maxv.x() - minv.x()),
-                    minv.y() + ry * (maxv.y() - minv.y()),
-                    minv.z() + rz * (maxv.z() - minv.z())
-                );
-
-
-                Particle p;
-                p.pos = glm::vec3(birth_pos.x(), birth_pos.y(), birth_pos.z());
-                p.vel = glm::vec3(
-                    (fpreal)(SYSdrand48() - 0.5) * 0.5f,
-                    (fpreal)(SYSdrand48() * 0.5f),
-                    (fpreal)(SYSdrand48() - 0.5) * 0.5f
-                );
-                p.mass = evalFloat("mass", 0, now);
-                p.F = glm::mat3(1.0f);
-                p.volume = params.cellSize * params.cellSize * params.cellSize;
-                p.Jp = 1.0f;
-
-                particles.push_back(p);
-            }
-
-            solver.setParticles(particles);
-        }
-    }
+ 
 
 
     setParameters(t);
@@ -483,6 +434,55 @@ SOP_MPM::cookMySop(OP_Context& context)
         }
         params.dt = subDt;
         solver.setParams(params);
+        // emitter: add to solver, not gdp
+        if (emit_on && frame % 5 == 0)
+        {
+            UT_BoundingBox emitBox;
+            if (getContainerBBox(container_geo, emitBox))
+            {
+                std::vector<Particle> particles;
+                particles.reserve(solver.getParticleCount() + emitrate);
+
+                for (int i = 0; i < solver.getParticleCount(); ++i)
+                    particles.push_back(solver.getParticle(i));
+
+                UT_Vector3 minv = emitBox.minvec();
+                UT_Vector3 maxv = emitBox.maxvec();
+
+                SYSsrand48((long)frame);
+
+                for (int e = 0; e < emitrate; ++e)
+                {
+                    float rx = (float)SYSdrand48();
+                    float ry = (float)SYSdrand48();
+                    float rz = (float)SYSdrand48();
+
+                    UT_Vector3 birth_pos(
+                        minv.x() + rx * (maxv.x() - minv.x()),
+                        minv.y() + ry * (maxv.y() - minv.y()),
+                        minv.z() + rz * (maxv.z() - minv.z())
+                    );
+
+
+                    Particle p;
+                    p.pos = glm::vec3(birth_pos.x(), birth_pos.y(), birth_pos.z());
+                    p.vel = glm::vec3(
+                        (fpreal)(SYSdrand48() - 0.5) * 0.5f,
+                        (fpreal)(SYSdrand48() * 0.5f),
+                        (fpreal)(SYSdrand48() - 0.5) * 0.5f
+                    );
+                    p.mass = evalFloat("mass", 0, now);
+                    p.is_emitter_particle = true;
+                    p.F = glm::mat3(1.0f);
+                    p.volume = params.cellSize * params.cellSize * params.cellSize;
+                    p.Jp = 1.0f;
+
+                    particles.push_back(p);
+                }
+
+                solver.setParticles(particles);
+            }
+        }
         solver.step();
     }
 

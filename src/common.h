@@ -60,6 +60,7 @@ struct Particle
     glm::mat3 F;
     glm::mat3 C;
     float Jp;
+    bool is_emitter_particle = false;
 };
 
 struct GridCell
