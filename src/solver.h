@@ -56,6 +56,7 @@ private:
 	std::vector<GridCell> gridCells;
 	Params params;
 	CollisionSDF collisionSDF;
+	std::vector<glm::ivec3> activeNodes;
 
 	glm::vec3 colliderTranslation;
 	glm::vec3 prevColliderTranslation;

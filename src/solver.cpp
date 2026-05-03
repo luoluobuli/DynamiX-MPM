@@ -23,10 +23,18 @@ void Solver::step() {
 }
 
 void Solver::clearGrid() {
-	for (auto& cell : gridCells) {
-		cell.m = 0.0f;
-		cell.v = glm::vec3(0.0f);
+	//for (auto& cell : gridCells) {
+	//	cell.m = 0.0f;
+	//	cell.v = glm::vec3(0.0f);
+	//}
+
+	for (auto coord : activeNodes)
+	{
+		int idx = cellIndex(coord.x, coord.y, coord.z);
+		gridCells[idx].m = 0.0f;
+		gridCells[idx].v = glm::vec3(0.0f);
 	}
+	activeNodes.clear();
 }
 
 void Solver::particleToGrid() {
@@ -93,6 +101,11 @@ void Solver::particleToGrid() {
 					glm::vec3 dpos = (glm::vec3(i, j, k) - fx) * params.cellSize;
 
 					GridCell& cell = gridCells[cellIndex(cellX, cellY, cellZ)];
+					if (cell.m == 0.0f)
+					{
+						activeNodes.push_back(glm::ivec3(cellX, cellY, cellZ));
+					}
+
 					cell.m += w * p.mass;
 					cell.v += w * (p.mass * p.vel + affine * dpos);
 				}
@@ -102,21 +115,35 @@ void Solver::particleToGrid() {
 }
 
 void Solver::updateGrid() {
-	for (int k = 0; k < params.gridRes.z; ++k) {
-		for (int j = 0; j < params.gridRes.y; ++j) {
-			for (int i = 0; i < params.gridRes.x; ++i) {
-				GridCell& cell = gridCells[cellIndex(i, j, k)];
-				if (cell.m > 0.01f) {
-					cell.v /= cell.m;
-					cell.v.y -= params.gravity * params.dt;
+	//for (int k = 0; k < params.gridRes.z; ++k) {
+	//	for (int j = 0; j < params.gridRes.y; ++j) {
+	//		for (int i = 0; i < params.gridRes.x; ++i) {
+	//			GridCell& cell = gridCells[cellIndex(i, j, k)];
+	//			if (cell.m > 0.01f) {
+	//				cell.v /= cell.m;
+	//				cell.v.y -= params.gravity * params.dt;
 
-					applyGridCollision(i, j, k, cell);
-				}
-				else {
-					cell.v = glm::vec3(0.0f);
-				}
-			}
-		}
+	//				applyGridCollision(i, j, k, cell);
+	//			}
+	//			else {
+	//				cell.v = glm::vec3(0.0f);
+	//			}
+	//		}
+	//	}
+	//}
+
+	for (auto coord : activeNodes)
+	{
+		int idx = cellIndex(coord.x, coord.y, coord.z);
+		GridCell& cell = gridCells[idx];
+
+		if (cell.m <= 0.0f)
+			continue;
+
+		cell.v /= cell.m;
+		cell.v.y -= params.gravity * params.dt;
+
+		applyGridCollision(coord.x, coord.y, coord.z, cell);
 	}
 }
 
@@ -400,7 +427,7 @@ void Solver::applyGridCollision(int i, int j, int k, GridCell& cell)
 	glm::vec3 n = sampleSDFNormal(x);
 
 	glm::vec3 v = cell.v - colliderVelocity;
-	float vn = glm::dot(cell.v, n);
+	float vn = glm::dot(v, n);
 
 	if (vn < 0.0f)
 	{
@@ -425,7 +452,7 @@ void Solver::applyGridCollision(int i, int j, int k, GridCell& cell)
 		}
 
 		cell.v = v_normal + v_tangent;
-		cell.v *= n * 3.0f;
+		cell.v *= n * 3.0f; // explosion factor
 	}
 }
 
