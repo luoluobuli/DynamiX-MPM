@@ -66,7 +66,7 @@ void Solver::particleToGrid() {
 		}
 
 		glm::mat3 FinvT = glm::transpose(glm::inverse(p.F));
-		glm::mat3 stress = params.mu * (p.F - FinvT) + params.lambda * log(J) * FinvT;
+		glm::mat3 stress = mu * (p.F - FinvT) + lambda * log(J) * FinvT;
 
 		// MLS-MPM
 		glm::mat3 stressTerm = (-4.f * invCellSize * invCellSize * params.dt * p.volume) * stress * glm::transpose(p.F);
@@ -105,7 +105,7 @@ void Solver::updateGrid() {
 				GridCell& cell = gridCells[cellIndex(i, j, k)];
 				if (cell.m > 0.01f) {
 					cell.v /= cell.m;
-					//cell.v.y -= params.gravity * params.dt;
+					cell.v.y -= params.gravity * params.dt;
 
 					applyGridCollision(i, j, k, cell);
 				}
@@ -166,9 +166,7 @@ void Solver::gridToParticle() {
 		if (p.is_emitter_particle) {
 			p.vel.y -= 9.8f * params.dt;
 		}
-		else {
-			p.vel.y -= params.gravity* params.dt;
-		}
+		
 		p.C = newC;
 		p.pos += p.vel * params.dt;
 		 
