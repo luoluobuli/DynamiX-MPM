@@ -266,22 +266,22 @@ void SOP_MPM::setParameters(float t)
     switch (mat)
     {
     case 0:
+        params.material = MaterialType::CUSTOM;
+        break;
+    case 1:
         params.material = MaterialType::SAND;
         params.thetaC = 0.08f;
         params.thetaS = 0.002f;
         break;
-    case 1:
+    case 2:
         params.material = MaterialType::SNOW;
         params.thetaC = 0.04f;
         params.thetaS = 0.015f;
         break;
-    case 2:
+    case 3:
         params.material = MaterialType::JELLY;
         params.thetaC = 0.15f;
         params.thetaS = 0.15f;
-        break;
-    case 3:
-		params.material = MaterialType::CUSTOM;
         break;
     default:
         params.material = MaterialType::CUSTOM;

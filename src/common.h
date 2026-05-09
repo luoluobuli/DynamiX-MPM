@@ -5,10 +5,10 @@
 
 enum class MaterialType
 {
-    SAND = 0,
-    SNOW = 1,
-    JELLY = 2,
-    CUSTOM = 3
+    CUSTOM = 0,
+    SAND = 1,
+    SNOW = 2,
+    JELLY = 3,
 };
 
 struct CollisionSDF
