@@ -39,9 +39,9 @@ static PRM_Name initVelocityName("initVelocity", "Initial Velocity");
 static PRM_Name materialName("material", "Material");
 static PRM_Name materialMenuItems[] = {
     PRM_Name("custom", "Custom"),
+    PRM_Name("jelly", "Jelly"),
     PRM_Name("sand",  "Sand"),
     PRM_Name("snow",  "Snow"),
-    PRM_Name("jelly", "Jelly"),
     PRM_Name(0)
 };
 

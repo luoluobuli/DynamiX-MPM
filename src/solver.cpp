@@ -186,19 +186,17 @@ void Solver::projectDeformation(Particle& p)
 {
 	switch (params.material)
 	{
+	case MaterialType::CUSTOM:
+		projectDefault(p);
+		break;
 	case MaterialType::SAND:
 		projectSand(p);
 		break;
-
 	case MaterialType::SNOW:
 		projectSnow(p);
 		break;
-
 	case MaterialType::JELLY:
 		projectJelly(p);
-		break;
-	case MaterialType::CUSTOM:
-		projectDefault(p);
 		break;
 	default:
 		projectDefault(p);
