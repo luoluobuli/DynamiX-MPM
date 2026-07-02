@@ -5,9 +5,9 @@ The built-in MPM solver in Houdini comes with a steep learning curve, not friend
 
 <table>
   <tr>
-    <td><img src="img/jelly.gif" width="200"></td>
-    <td><img src="img/foam.gif" width="200"></td>
-    <td><img src="img/sand.gif" width="200"></td>
+    <td><img src="img/jelly.gif" width="300"></td>
+    <td><img src="img/foam.gif" width="300"></td>
+    <td><img src="img/sand.gif" width="300"></td>
   </tr>
 </table>
 
