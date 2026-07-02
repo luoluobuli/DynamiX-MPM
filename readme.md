@@ -1,6 +1,18 @@
-# DynaMIX: Houdini Custom MPM Plugin
+# DynamiX: Houdini Custom MPM Plugin
 
 ## Overview
+The built-in MPM solver in Houdini comes with a steep learning curve, not friendly for artists new to physics simulation. We aim to develop a custom MPM solver node that simplifies this workflow.
+
+<table>
+  <tr>
+    <td><img src="img/jelly.gif" width="200"></td>
+    <td><img src="img/foam.gif" width="200"></td>
+    <td><img src="img/sand.gif" width="200"></td>
+  </tr>
+</table>
+
+## Demo
+<video src="img/demo.mp4" width="640" height="360" controls></video>
 
 ## CMake Build Instructions
 ### Preparation for building the project
