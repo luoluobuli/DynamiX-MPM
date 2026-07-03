@@ -12,7 +12,7 @@ The built-in MPM solver in Houdini comes with a steep learning curve, not friend
 </table>
 
 ## Demo
-<video src="img/demo.mp4" width="640" height="360" controls></video>
+<https://github.com/user-attachments/assets/591d7e13-0387-483d-a568-54489740a103>
 
 ## CMake Build Instructions
 ### Preparation for building the project
