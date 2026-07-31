@@ -10,7 +10,13 @@ mark_as_advanced(CMAKE_BUILD_TYPE CMAKE_CONFIGURATION_TYPES)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-set(HOUDINI_INSTALL_PATH "C:/Program Files/Side Effects Software/Houdini 21.0.512")
+if(DEFINED ENV{HOUDINI_INSTALL_PATH})
+    set(HOUDINI_INSTALL_PATH $ENV{HOUDINI_INSTALL_PATH})
+else()
+    message(FATAL_ERROR "Houdini install path not found")
+endif()
+
+# set(HOUDINI_INSTALL_PATH "C:/Program Files/Side Effects Software/Houdini 21.0.512")
 set(HOUDINI_LIB_PATH "${HOUDINI_INSTALL_PATH}/custom/houdini/dsolib")
 
 if (NOT EXISTS "${HOUDINI_INSTALL_PATH}")

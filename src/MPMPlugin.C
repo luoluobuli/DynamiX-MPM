@@ -17,7 +17,7 @@ newSopOperator(OP_OperatorTable* table)
     table->addOperator(
         new OP_Operator(
             "CusMPM",			// Internal name
-            "OurMPM",			// UI name
+            "DynamiX MPM",			// UI name
             SOP_MPM::myConstructor,	// How to build the SOP
             SOP_MPM::myTemplateList,	// My parameters
             1,				// Min # of sources
